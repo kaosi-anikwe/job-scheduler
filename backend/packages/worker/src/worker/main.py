@@ -12,16 +12,13 @@ Run with: ``uv run --package worker python -m worker.main``
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import signal
-import sys
-from datetime import datetime, timezone
 
 from shared.config import get_settings
 from shared.database import dispose_engine, get_db_context, get_engine
 from shared.logging import get_logger, setup_logging
-from shared.models.job import JobORM
 from shared.redis import close_redis, get_redis
-
 from worker.executor.lock_manager import LockManager
 from worker.executor.worker_pool import WorkerPool
 from worker.recovery.cancellation import CancellationListener
@@ -95,7 +92,7 @@ async def dlq_monitor_loop(shutdown: asyncio.Event) -> None:
         try:
             await asyncio.wait_for(shutdown.wait(), timeout=60.0)
             break
-        except asyncio.TimeoutError:
+        except TimeoutError:
             pass
 
     logger.info("DLQ monitor stopped", extra={"event": "DLQ_MONITOR_STOP"})
@@ -133,11 +130,8 @@ async def run_worker() -> None:
 
     loop = asyncio.get_running_loop()
     for sig in (signal.SIGINT, signal.SIGTERM):
-        try:
+        with contextlib.suppress(NotImplementedError):
             loop.add_signal_handler(sig, _signal_handler)
-        except NotImplementedError:
-            # Windows doesn't support add_signal_handler
-            pass
 
     # Start all subsystems
     await pool.start()
@@ -149,10 +143,8 @@ async def run_worker() -> None:
     logger.info("Worker fully started — processing jobs", extra={"event": "WORKER_READY"})
 
     # Wait for shutdown signal
-    try:
+    with contextlib.suppress(asyncio.CancelledError):
         await shutdown.wait()
-    except asyncio.CancelledError:
-        pass
 
     # Graceful shutdown
     logger.info("Shutting down worker...", extra={"event": "WORKER_SHUTDOWN"})
@@ -162,14 +154,10 @@ async def run_worker() -> None:
     await cancel_listener.stop()
     await pool.stop()
 
-    try:
+    with contextlib.suppress(asyncio.CancelledError):
         await scheduler_task
-    except asyncio.CancelledError:
-        pass
-    try:
+    with contextlib.suppress(asyncio.CancelledError):
         await dlq_task
-    except asyncio.CancelledError:
-        pass
 
     # Cleanup
     await close_redis()
@@ -180,10 +168,8 @@ async def run_worker() -> None:
 
 def main() -> None:
     """CLI entry point."""
-    try:
+    with contextlib.suppress(KeyboardInterrupt):
         asyncio.run(run_worker())
-    except KeyboardInterrupt:
-        pass
 
 
 if __name__ == "__main__":

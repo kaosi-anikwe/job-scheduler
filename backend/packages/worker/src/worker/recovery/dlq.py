@@ -14,13 +14,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.config import get_settings
 from shared.logging import get_logger
-from shared.models.job import JobORM
+from shared.models.job import Job
 
 logger = get_logger(__name__)
 
 
 async def move_to_dlq(
-    job: JobORM,
+    job: Job,
     error: Exception,
     session: AsyncSession,
 ) -> None:
@@ -44,9 +44,9 @@ async def move_to_dlq(
 async def get_dlq_count(session: AsyncSession) -> int:
     """Return the number of jobs currently in the DLQ."""
     result = await session.execute(
-        select(func.count(JobORM.id)).where(
-            JobORM.status == "failed",
-            JobORM.retry_count >= JobORM.max_retries,
+        select(func.count(Job.id)).where(
+            Job.status == "failed",
+            Job.retry_count >= Job.max_retries,
         )
     )
     return result.scalar_one()
@@ -79,8 +79,9 @@ async def send_dlq_alert(dlq_count: int) -> None:
     )
 
     try:
-        import aiosmtplib
         from email.mime.text import MIMEText
+
+        import aiosmtplib
 
         msg = MIMEText(body)
         msg["Subject"] = subject

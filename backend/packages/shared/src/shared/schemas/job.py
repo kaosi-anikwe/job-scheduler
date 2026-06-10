@@ -4,18 +4,17 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
-from enum import Enum
-from typing import Any, Optional
+from enum import Enum, StrEnum
+from typing import Any
 
 from pydantic import BaseModel, Field
-
 
 # ---------------------------------------------------------------------------
 # Enums
 # ---------------------------------------------------------------------------
 
 
-class JobStatus(str, Enum):
+class JobStatus(StrEnum):
     """Valid job status values."""
 
     PENDING = "pending"
@@ -33,7 +32,7 @@ class JobPriority(int, Enum):
     LOW = 3
 
 
-class JobInterval(str, Enum):
+class JobInterval(StrEnum):
     """Supported recurring intervals."""
 
     EVERY_1_MINUTE = "every_1_minute"
@@ -63,11 +62,11 @@ class JobCreate(BaseModel):
         default_factory=dict,
         examples=[{"to": "test@gmail.com", "subject": "Welcome"}],
     )
-    scheduled_at: Optional[datetime] = Field(
+    scheduled_at: datetime | None = Field(
         default=None,
         description="When to run. Defaults to now if omitted.",
     )
-    interval: Optional[JobInterval] = Field(
+    interval: JobInterval | None = Field(
         default=None,
         description="Recurring interval. None = one-shot job.",
     )
@@ -98,11 +97,11 @@ class JobResponse(BaseModel):
     priority: int
     status: str
     payload: dict[str, Any]
-    error_details: Optional[dict[str, Any]] = None
+    error_details: dict[str, Any] | None = None
     retry_count: int
     max_retries: int
     scheduled_at: datetime
-    interval: Optional[str] = None
+    interval: str | None = None
     created_at: datetime
     updated_at: datetime
 

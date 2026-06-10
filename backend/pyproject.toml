@@ -14,6 +14,13 @@ target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
+ignore = [
+    "B008",   # Depends() in function defaults — standard FastAPI pattern
+]
+
+[tool.ruff.lint.per-file-ignores]
+"packages/*/tests/**" = ["B", "SIM"]
+"alembic/**" = ["UP"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["shared", "api", "worker"]
@@ -24,4 +31,27 @@ testpaths = [
     "packages/shared/tests",
     "packages/api/tests",
     "packages/worker/tests",
+]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+ignore_missing_imports = true
+plugins = ["pydantic.mypy"]
+mypy_path = "packages/shared/src:packages/api/src:packages/worker/src"
+
+[tool.pydantic-mypy]
+init_forbid_extra = true
+init_typed = true
+warn_required_dynamic_aliases = true
+
+[dependency-groups]
+dev = [
+    "mypy>=2.1.0",
+    "pre-commit>=4.6.0",
+    "ruff>=0.15.16",
+    "types-redis",
 ]

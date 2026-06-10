@@ -50,7 +50,7 @@ class LogHandler(BaseHandler):
         )
 
         # -- Parse and categorise each entry --
-        level_counts: Counter = Counter()
+        level_counts: Counter[str] = Counter()
         parsed_entries: list[dict[str, str]] = []
         errors: list[str] = []
 
@@ -80,9 +80,7 @@ class LogHandler(BaseHandler):
 
         # -- Simulate random processing failure (~5%) --
         if random.random() < 0.05:
-            raise RuntimeError(
-                f"Simulated log processing failure (exercises retry logic)"
-            )
+            raise RuntimeError("Simulated log processing failure (exercises retry logic)")
 
         result = {
             "status": "processed",

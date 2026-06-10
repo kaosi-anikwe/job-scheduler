@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import uuid
-from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.deps import get_db
+from api.services import job_service
 from shared.schemas.execution_log import ExecutionLogResponse
 from shared.schemas.job import (
     DashboardStats,
@@ -16,9 +17,6 @@ from shared.schemas.job import (
     JobResponse,
 )
 
-from api.deps import get_db
-from api.services import job_service
-
 router = APIRouter()
 
 
@@ -26,7 +24,7 @@ router = APIRouter()
 async def create_job(
     data: JobCreate,
     db: AsyncSession = Depends(get_db),
-):
+) -> JobResponse:
     """Create a new job with optional DAG dependencies.
 
     If ``dependency_ids`` are provided, the job will not execute until all
@@ -36,18 +34,18 @@ async def create_job(
         job = await job_service.create_job(data, db)
         return JobResponse.model_validate(job)
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.get("/jobs", response_model=JobListResponse, summary="List jobs")
 async def list_jobs(
-    status: Optional[str] = Query(None, description="Filter by status"),
-    type: Optional[str] = Query(None, alias="type", description="Filter by job type"),
-    priority: Optional[int] = Query(None, description="Filter by priority (1, 2, 3)"),
+    status: str | None = Query(None, description="Filter by status"),
+    type: str | None = Query(None, alias="type", description="Filter by job type"),
+    priority: int | None = Query(None, description="Filter by priority (1, 2, 3)"),
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
-):
+) -> JobListResponse:
     """List jobs with optional filtering and pagination."""
     return await job_service.list_jobs(
         db,
@@ -64,7 +62,7 @@ async def list_jobs(
     response_model=DashboardStats,
     summary="Dashboard stats",
 )
-async def dashboard_stats(db: AsyncSession = Depends(get_db)):
+async def dashboard_stats(db: AsyncSession = Depends(get_db)) -> DashboardStats:
     """Return job counts grouped by status for the dashboard view."""
     return await job_service.get_dashboard_stats(db)
 
@@ -73,7 +71,7 @@ async def dashboard_stats(db: AsyncSession = Depends(get_db)):
 async def get_job(
     job_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-):
+) -> JobResponse:
     """Get a single job by ID."""
     job = await job_service.get_job(job_id, db)
     if job is None:
@@ -85,7 +83,7 @@ async def get_job(
 async def cancel_job(
     job_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-):
+) -> JobResponse:
     """Cancel a pending or processing job.
 
     If the job is currently processing, a cooperative cancellation signal
@@ -95,7 +93,7 @@ async def cancel_job(
         job = await job_service.cancel_job(job_id, db)
         return JobResponse.model_validate(job)
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.get(
@@ -106,7 +104,7 @@ async def cancel_job(
 async def get_job_logs(
     job_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-):
+) -> list[ExecutionLogResponse]:
     """Get structured execution logs for a specific job."""
     # Verify job exists
     job = await job_service.get_job(job_id, db)

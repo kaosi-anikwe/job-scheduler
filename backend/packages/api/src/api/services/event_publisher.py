@@ -1,21 +1,20 @@
 """Event publisher — writes execution logs and broadcasts via Redis Pub/Sub.
 
 Every job state transition is:
-1. Persisted as an ``ExecutionLogORM`` row in Postgres.
+1. Persisted as an ``ExecutionLog`` row in Postgres.
 2. Published as JSON to the ``jobs:events`` Redis channel for WebSocket fan-out.
 """
 
 from __future__ import annotations
 
-import json
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.logging import get_logger
-from shared.models.execution_log import ExecutionLogORM
+from shared.models.execution_log import ExecutionLog
 from shared.redis import get_redis
 from shared.schemas.websocket import WebSocketEvent
 
@@ -45,7 +44,7 @@ async def publish_event(
     log_data = data or {}
 
     # 1. Persist to execution_logs table
-    log_entry = ExecutionLogORM(
+    log_entry = ExecutionLog(
         job_id=job_id,
         event_type=event_type,
         log_data=log_data,
@@ -60,7 +59,7 @@ async def publish_event(
         event=event_type,
         job_id=job_id,
         data=log_data,
-        timestamp=datetime.now(timezone.utc),
+        timestamp=datetime.now(UTC),
     )
 
     try:

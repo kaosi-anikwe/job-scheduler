@@ -21,7 +21,7 @@ from __future__ import annotations
 import asyncio
 import time
 from dataclasses import dataclass, field
-from typing import Any, Optional
+from typing import Any
 
 
 @dataclass
@@ -105,9 +105,7 @@ class HashedTimingWheel:
             slot_idx = self._job_slots.pop(job_id, None)
             if slot_idx is None:
                 return False
-            self.wheel[slot_idx] = [
-                j for j in self.wheel[slot_idx] if j.job_id != job_id
-            ]
+            self.wheel[slot_idx] = [j for j in self.wheel[slot_idx] if j.job_id != job_id]
             return True
 
     async def size(self) -> int:

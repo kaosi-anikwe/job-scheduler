@@ -7,13 +7,12 @@ from Redis ``jobs:events`` channel to all connected clients.
 from __future__ import annotations
 
 import asyncio
-import json
-from typing import Optional
+import contextlib
 
 from fastapi import WebSocket, WebSocketDisconnect
 
 from shared.logging import get_logger
-from shared.redis import get_redis, get_pubsub
+from shared.redis import get_pubsub
 
 logger = get_logger(__name__)
 
@@ -23,7 +22,7 @@ class ConnectionManager:
 
     def __init__(self) -> None:
         self._connections: list[WebSocket] = []
-        self._listener_task: Optional[asyncio.Task] = None
+        self._listener_task: asyncio.Task[None] | None = None
 
     async def connect(self, websocket: WebSocket) -> None:
         """Accept and register a WebSocket connection."""
@@ -69,10 +68,8 @@ class ConnectionManager:
         """Cancel the Redis listener background task."""
         if self._listener_task and not self._listener_task.done():
             self._listener_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._listener_task
-            except asyncio.CancelledError:
-                pass
         logger.info("WebSocket Redis listener stopped")
 
     async def _redis_listener(self) -> None:

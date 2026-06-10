@@ -13,16 +13,15 @@ from __future__ import annotations
 
 import uuid
 from collections import defaultdict
-from datetime import datetime, timezone
 
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from shared.models.job import JobORM
-from shared.models.job_dependency import JobDependencyORM
+from shared.models.job import Job
+from shared.models.job_dependency import JobDependency
 
 
-async def get_ready_jobs(session: AsyncSession) -> list[JobORM]:
+async def get_ready_jobs(session: AsyncSession) -> list[Job]:
     """Return all jobs that are ready to be scheduled.
 
     A job is ready when:
@@ -53,9 +52,7 @@ async def get_ready_jobs(session: AsyncSession) -> list[JobORM]:
         return []
 
     # Fetch full ORM objects for the ready jobs
-    orm_result = await session.execute(
-        select(JobORM).where(JobORM.id.in_(ready_ids))
-    )
+    orm_result = await session.execute(select(Job).where(Job.id.in_(ready_ids)))
     return list(orm_result.scalars().all())
 
 
@@ -71,7 +68,7 @@ async def validate_no_cycles(
 
     Returns True if the DAG remains valid, False if a cycle is detected.
     """
-    result = await session.execute(select(JobDependencyORM))
+    result = await session.execute(select(JobDependency))
     edges = result.scalars().all()
 
     child_to_parents: dict[uuid.UUID, list[uuid.UUID]] = defaultdict(list)

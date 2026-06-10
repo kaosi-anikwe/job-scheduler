@@ -6,7 +6,6 @@ retries on 5xx server errors.
 
 from __future__ import annotations
 
-import asyncio
 from typing import Any
 
 import httpx
@@ -54,9 +53,7 @@ class WebhookHandler(BaseHandler):
 
         # Raise on 5xx errors (triggers retry)
         if response.status_code >= 500:
-            raise ConnectionError(
-                f"Webhook returned {response.status_code}: {response.text[:200]}"
-            )
+            raise ConnectionError(f"Webhook returned {response.status_code}: {response.text[:200]}")
 
         # 4xx errors are not retried — they're client errors
         if response.status_code >= 400:

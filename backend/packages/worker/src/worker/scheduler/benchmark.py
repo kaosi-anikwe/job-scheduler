@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import asyncio
 import random
-import statistics
 import time
 from typing import Any
 
@@ -23,14 +22,16 @@ def _generate_jobs(n: int) -> list[dict[str, Any]]:
     now = time.time()
     jobs: list[dict[str, Any]] = []
     for i in range(n):
-        jobs.append({
-            "job_id": f"bench-{i}",
-            "job_type": "send_email",
-            "base_priority": random.choice([1, 2, 3]),
-            "scheduled_at": now + random.uniform(0, 3600),
-            "created_at": now - random.uniform(0, 7200),
-            "payload": {"index": i},
-        })
+        jobs.append(
+            {
+                "job_id": f"bench-{i}",
+                "job_type": "send_email",
+                "base_priority": random.choice([1, 2, 3]),
+                "scheduled_at": now + random.uniform(0, 3600),
+                "created_at": now - random.uniform(0, 7200),
+                "payload": {"index": i},
+            }
+        )
     return jobs
 
 
@@ -50,9 +51,9 @@ async def _benchmark_heap(jobs: list[dict[str, Any]]) -> dict[str, Any]:
     extract_times: list[float] = []
     while True:
         start = time.perf_counter()
-        node = await heap.pop()
+        popped = await heap.pop()
         elapsed = time.perf_counter() - start
-        if node is None:
+        if popped is None:
             break
         extract_times.append(elapsed)
 
@@ -141,7 +142,7 @@ async def run_benchmarks() -> str:
                 f"| {_format_us(_percentile(ins, 50))} "
                 f"| {_format_us(_percentile(ins, 95))} "
                 f"| {_format_us(_percentile(ins, 99))} "
-                f"| {sum(ins)*1000:.2f}ms |"
+                f"| {sum(ins) * 1000:.2f}ms |"
             )
 
     lines.append("\n## Extract Performance\n")
@@ -162,7 +163,7 @@ async def run_benchmarks() -> str:
                     f"| {_format_us(_percentile(ext, 50))} "
                     f"| {_format_us(_percentile(ext, 95))} "
                     f"| {_format_us(_percentile(ext, 99))} "
-                    f"| {sum(ext)*1000:.2f}ms |"
+                    f"| {sum(ext) * 1000:.2f}ms |"
                 )
             else:
                 lines.append(f"| {n:,} | {name} | N/A | N/A | N/A | N/A |")
@@ -180,7 +181,9 @@ async def run_benchmarks() -> str:
     lines.append("- **Best for:** High-volume delayed/scheduled jobs with uniform timing\n")
     lines.append("### Tradeoff Summary")
     lines.append("The heap excels when priority ordering is critical and job volumes are moderate.")
-    lines.append("The timing wheel excels at high-volume scheduled events where O(1) insert matters")
+    lines.append(
+        "The timing wheel excels at high-volume scheduled events where O(1) insert matters"
+    )
     lines.append("more than per-job priority ordering.")
 
     return "\n".join(lines)
@@ -194,7 +197,7 @@ async def main() -> None:
     # Also save to file
     with open("benchmark_results.md", "w") as f:
         f.write(report)
-    print(f"\nResults saved to benchmark_results.md")
+    print("\nResults saved to benchmark_results.md")
 
 
 if __name__ == "__main__":

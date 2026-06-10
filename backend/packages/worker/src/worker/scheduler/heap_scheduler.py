@@ -21,7 +21,7 @@ from __future__ import annotations
 import asyncio
 import heapq
 from dataclasses import dataclass, field
-from typing import Any, Optional
+from typing import Any
 
 
 @dataclass(order=False)
@@ -84,7 +84,7 @@ class HeapScheduler:
             heapq.heappush(self._heap, node)
             self._job_ids.add(node.job_id)
 
-    async def pop(self) -> Optional[JobNode]:
+    async def pop(self) -> JobNode | None:
         """Remove and return the highest-priority job, or ``None`` if empty."""
         async with self._lock:
             if not self._heap:
@@ -93,7 +93,7 @@ class HeapScheduler:
             self._job_ids.discard(node.job_id)
             return node
 
-    async def peek(self) -> Optional[JobNode]:
+    async def peek(self) -> JobNode | None:
         """Return the highest-priority job without removing it."""
         async with self._lock:
             return self._heap[0] if self._heap else None

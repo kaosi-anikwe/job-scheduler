@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 import logging
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from shared.config import get_settings
@@ -21,7 +21,7 @@ class JSONFormatter(logging.Formatter):
 
     def format(self, record: logging.LogRecord) -> str:
         log_entry: dict[str, Any] = {
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "level": record.levelname,
             "logger": record.name,
             "message": record.getMessage(),
@@ -31,7 +31,7 @@ class JSONFormatter(logging.Formatter):
         for field in ("event", "job_id", "worker_node", "correlation_id", "duration_ms"):
             value = getattr(record, field, None)
             if value is not None:
-                log_entry[field] = str(value) if not isinstance(value, (int, float)) else value
+                log_entry[field] = str(value) if not isinstance(value, int | float) else value
 
         # Include exception info if present
         if record.exc_info and record.exc_info[1]:

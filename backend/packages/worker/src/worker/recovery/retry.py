@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import random
 
-from shared.models.job import JobORM
+from shared.models.job import Job
 
 
 def calculate_backoff(retry_count: int) -> float:
@@ -26,6 +26,6 @@ def calculate_backoff(retry_count: int) -> float:
     return base_delay + jitter
 
 
-def should_retry(job: JobORM) -> bool:
+def should_retry(job: Job) -> bool:
     """Return True if the job has remaining retry attempts."""
     return job.retry_count < job.max_retries

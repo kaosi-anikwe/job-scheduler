@@ -8,6 +8,7 @@ Per system design §8.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 from typing import TYPE_CHECKING
 
 from shared.logging import get_logger
@@ -22,9 +23,9 @@ logger = get_logger(__name__)
 class CancellationListener:
     """Listens for job cancellation signals on Redis Pub/Sub."""
 
-    def __init__(self, worker_pool: "WorkerPool") -> None:
+    def __init__(self, worker_pool: WorkerPool) -> None:
         self._worker_pool = worker_pool
-        self._task: asyncio.Task | None = None
+        self._task: asyncio.Task[None] | None = None
 
     async def start(self) -> None:
         """Start the cancellation listener as a background task."""
@@ -35,10 +36,8 @@ class CancellationListener:
         """Stop the cancellation listener."""
         if self._task and not self._task.done():
             self._task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._task
-            except asyncio.CancelledError:
-                pass
         logger.info("Cancellation listener stopped", extra={"event": "CANCEL_LISTENER_STOP"})
 
     async def _listen(self) -> None:

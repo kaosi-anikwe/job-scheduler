@@ -15,7 +15,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from shared.models.base import Base
 
 
-class JobDependencyORM(Base):
+class JobDependency(Base):
     """Represents a parent → child dependency edge in a DAG workflow."""
 
     __tablename__ = "job_dependencies"
@@ -31,24 +31,21 @@ class JobDependencyORM(Base):
         primary_key=True,
     )
 
-    # -- Relationships (back-references to JobORM) ---------------------------
+    # -- Relationships (back-references to Job) ---------------------------
 
-    parent_job: Mapped["JobORM"] = relationship(
-        "JobORM",
+    parent_job: Mapped[Job] = relationship(
+        "Job",
         foreign_keys=[parent_job_id],
         overlaps="child_dependencies",
     )
-    child_job: Mapped["JobORM"] = relationship(
-        "JobORM",
+    child_job: Mapped[Job] = relationship(
+        "Job",
         foreign_keys=[child_job_id],
         overlaps="parent_dependencies",
     )
 
     def __repr__(self) -> str:
-        return (
-            f"<JobDependency parent={self.parent_job_id!s:.8} "
-            f"→ child={self.child_job_id!s:.8}>"
-        )
+        return f"<JobDependency parent={self.parent_job_id!s:.8} → child={self.child_job_id!s:.8}>"
 
 
-from shared.models.job import JobORM  # noqa: E402, F811
+from shared.models.job import Job  # noqa: E402, F811

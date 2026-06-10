@@ -11,6 +11,7 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
 from sqlalchemy.ext.asyncio import (
+    AsyncEngine,
     AsyncSession,
     async_sessionmaker,
     create_async_engine,
@@ -22,11 +23,11 @@ from shared.config import get_settings
 # Engine & session factory (module-level singletons, lazily initialised)
 # ---------------------------------------------------------------------------
 
-_engine = None
-_session_factory = None
+_engine: AsyncEngine | None = None
+_session_factory: async_sessionmaker[AsyncSession] | None = None
 
 
-def _get_engine():
+def _get_engine() -> AsyncEngine:
     global _engine
     if _engine is None:
         settings = get_settings()
@@ -40,7 +41,7 @@ def _get_engine():
     return _engine
 
 
-def _get_session_factory():
+def _get_session_factory() -> async_sessionmaker[AsyncSession]:
     global _session_factory
     if _session_factory is None:
         _session_factory = async_sessionmaker(
@@ -85,7 +86,7 @@ async def get_db_context() -> AsyncGenerator[AsyncSession, None]:
             raise
 
 
-def get_engine():
+def get_engine() -> AsyncEngine:
     """Return the shared ``AsyncEngine`` instance."""
     return _get_engine()
 

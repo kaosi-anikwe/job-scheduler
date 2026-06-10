@@ -2,12 +2,10 @@
 
 from __future__ import annotations
 
-from typing import Optional
-
 from worker.handlers.base import BaseHandler
 from worker.handlers.email_handler import EmailHandler
-from worker.handlers.webhook_handler import WebhookHandler
 from worker.handlers.log_handler import LogHandler
+from worker.handlers.webhook_handler import WebhookHandler
 
 # Maps job type → handler instance (singletons)
 _REGISTRY: dict[str, BaseHandler] = {
@@ -17,7 +15,7 @@ _REGISTRY: dict[str, BaseHandler] = {
 }
 
 
-def get_handler(job_type: str) -> Optional[BaseHandler]:
+def get_handler(job_type: str) -> BaseHandler | None:
     """Return the handler for the given job type, or None if not registered."""
     return _REGISTRY.get(job_type)
 

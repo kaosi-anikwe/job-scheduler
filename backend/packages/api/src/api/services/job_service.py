@@ -4,24 +4,22 @@ from __future__ import annotations
 
 import uuid
 from collections import defaultdict
-from datetime import datetime, timezone
-from typing import Any, Optional
+from datetime import UTC, datetime
 
-from sqlalchemy import func, select, text
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.services.event_publisher import publish_event
 from shared.logging import get_logger
-from shared.models.execution_log import ExecutionLogORM
-from shared.models.job import JobORM
-from shared.models.job_dependency import JobDependencyORM
+from shared.models.execution_log import ExecutionLog
+from shared.models.job import Job
+from shared.models.job_dependency import JobDependency
 from shared.schemas.job import (
     DashboardStats,
     JobCreate,
     JobListResponse,
     JobResponse,
 )
-
-from api.services.event_publisher import publish_event
 
 logger = get_logger(__name__)
 
@@ -31,17 +29,17 @@ logger = get_logger(__name__)
 # ---------------------------------------------------------------------------
 
 
-async def create_job(data: JobCreate, session: AsyncSession) -> JobORM:
+async def create_job(data: JobCreate, session: AsyncSession) -> Job:
     """Create a new job with optional DAG dependencies.
 
     Validates that adding the specified dependencies does not introduce
     a cycle before committing.
     """
-    job = JobORM(
+    job = Job(
         type=data.type,
         priority=data.priority.value,
         payload=data.payload,
-        scheduled_at=data.scheduled_at or datetime.now(timezone.utc),
+        scheduled_at=data.scheduled_at or datetime.now(UTC),
         interval=data.interval.value if data.interval else None,
     )
     session.add(job)
@@ -50,9 +48,7 @@ async def create_job(data: JobCreate, session: AsyncSession) -> JobORM:
     # Create dependency edges
     if data.dependency_ids:
         # Validate all parent IDs exist
-        result = await session.execute(
-            select(JobORM.id).where(JobORM.id.in_(data.dependency_ids))
-        )
+        result = await session.execute(select(Job.id).where(Job.id.in_(data.dependency_ids)))
         existing_ids = {row[0] for row in result.all()}
         missing = set(data.dependency_ids) - existing_ids
         if missing:
@@ -63,7 +59,7 @@ async def create_job(data: JobCreate, session: AsyncSession) -> JobORM:
             raise ValueError("Adding these dependencies would create a cycle in the DAG")
 
         for parent_id in data.dependency_ids:
-            dep = JobDependencyORM(parent_job_id=parent_id, child_job_id=job.id)
+            dep = JobDependency(parent_job_id=parent_id, child_job_id=job.id)
             session.add(dep)
 
     # Publish creation event
@@ -77,36 +73,36 @@ async def create_job(data: JobCreate, session: AsyncSession) -> JobORM:
     return job
 
 
-async def get_job(job_id: uuid.UUID, session: AsyncSession) -> JobORM | None:
+async def get_job(job_id: uuid.UUID, session: AsyncSession) -> Job | None:
     """Fetch a single job by ID."""
-    result = await session.execute(select(JobORM).where(JobORM.id == job_id))
+    result = await session.execute(select(Job).where(Job.id == job_id))
     return result.scalar_one_or_none()
 
 
 async def list_jobs(
     session: AsyncSession,
     *,
-    status: Optional[str] = None,
-    job_type: Optional[str] = None,
-    priority: Optional[int] = None,
+    status: str | None = None,
+    job_type: str | None = None,
+    priority: int | None = None,
     offset: int = 0,
     limit: int = 50,
 ) -> JobListResponse:
     """List jobs with optional filtering and pagination."""
-    query = select(JobORM)
-    count_query = select(func.count(JobORM.id))
+    query = select(Job)
+    count_query = select(func.count(Job.id))
 
     if status:
-        query = query.where(JobORM.status == status)
-        count_query = count_query.where(JobORM.status == status)
+        query = query.where(Job.status == status)
+        count_query = count_query.where(Job.status == status)
     if job_type:
-        query = query.where(JobORM.type == job_type)
-        count_query = count_query.where(JobORM.type == job_type)
+        query = query.where(Job.type == job_type)
+        count_query = count_query.where(Job.type == job_type)
     if priority is not None:
-        query = query.where(JobORM.priority == priority)
-        count_query = count_query.where(JobORM.priority == priority)
+        query = query.where(Job.priority == priority)
+        count_query = count_query.where(Job.priority == priority)
 
-    query = query.order_by(JobORM.created_at.desc()).offset(offset).limit(limit)
+    query = query.order_by(Job.created_at.desc()).offset(offset).limit(limit)
 
     result = await session.execute(query)
     jobs = result.scalars().all()
@@ -125,7 +121,7 @@ async def list_jobs(
 async def cancel_job(
     job_id: uuid.UUID,
     session: AsyncSession,
-) -> JobORM:
+) -> Job:
     """Cancel a job.
 
     - If ``pending``: sets status to ``cancelled``.
@@ -166,10 +162,7 @@ async def cancel_job(
 
 async def get_dashboard_stats(session: AsyncSession) -> DashboardStats:
     """Return job counts grouped by status."""
-    result = await session.execute(
-        select(JobORM.status, func.count(JobORM.id))
-        .group_by(JobORM.status)
-    )
+    result = await session.execute(select(Job.status, func.count(Job.id)).group_by(Job.status))
     counts: dict[str, int] = {row[0]: row[1] for row in result.all()}
 
     stats = DashboardStats(
@@ -179,19 +172,27 @@ async def get_dashboard_stats(session: AsyncSession) -> DashboardStats:
         failed=counts.get("failed", 0),
         cancelled=counts.get("cancelled", 0),
     )
-    stats.total = sum([stats.pending, stats.processing, stats.completed, stats.failed, stats.cancelled])
+    stats.total = sum(
+        [
+            stats.pending,
+            stats.processing,
+            stats.completed,
+            stats.failed,
+            stats.cancelled,
+        ]
+    )
     return stats
 
 
 async def get_job_logs(
     job_id: uuid.UUID,
     session: AsyncSession,
-) -> list[ExecutionLogORM]:
+) -> list[ExecutionLog]:
     """Return execution logs for a specific job, ordered by creation time."""
     result = await session.execute(
-        select(ExecutionLogORM)
-        .where(ExecutionLogORM.job_id == job_id)
-        .order_by(ExecutionLogORM.created_at.asc())
+        select(ExecutionLog)
+        .where(ExecutionLog.job_id == job_id)
+        .order_by(ExecutionLog.created_at.asc())
     )
     return list(result.scalars().all())
 
@@ -212,7 +213,7 @@ async def _validate_dag(
     to verify the new_job_id is not an ancestor of any proposed parent.
     """
     # Build adjacency: child → [parents]
-    result = await session.execute(select(JobDependencyORM))
+    result = await session.execute(select(JobDependency))
     edges = result.scalars().all()
 
     child_to_parents: dict[uuid.UUID, list[uuid.UUID]] = defaultdict(list)

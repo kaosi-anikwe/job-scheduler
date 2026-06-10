@@ -6,22 +6,22 @@ startup. Cleans up all resources on shutdown.
 
 from __future__ import annotations
 
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from api.routers import dlq, health, jobs
+from api.websocket.manager import manager
 from shared.config import get_settings
 from shared.database import dispose_engine, get_engine
 from shared.logging import setup_logging
 from shared.redis import close_redis, get_redis
 
-from api.routers import dlq, health, jobs
-from api.websocket.manager import manager
-
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Startup / shutdown lifecycle for the FastAPI app."""
     # -- Startup --
     setup_logging()

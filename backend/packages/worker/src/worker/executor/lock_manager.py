@@ -6,6 +6,8 @@ per system design §6.1.
 
 from __future__ import annotations
 
+from typing import Any
+
 import redis.asyncio as aioredis
 
 from shared.logging import get_logger
@@ -35,7 +37,7 @@ end
 class LockManager:
     """Distributed lock manager using Redis for job claim tokens."""
 
-    def __init__(self, redis_client: aioredis.Redis) -> None:
+    def __init__(self, redis_client: aioredis.Redis[Any]) -> None:
         self._redis = redis_client
 
     async def acquire(
@@ -79,7 +81,9 @@ class LockManager:
         Returns True if the lock was released, False if not owned.
         """
         lock_key = f"lock:job:{job_id}"
-        result = await self._redis.eval(_RELEASE_LOCK_SCRIPT, 1, lock_key, worker_uuid)
+        result = await self._redis.eval(  # type: ignore[no-untyped-call]
+            _RELEASE_LOCK_SCRIPT, 1, lock_key, worker_uuid
+        )
 
         released = result == 1
         if released:
@@ -88,7 +92,7 @@ class LockManager:
                 extra={"event": "LOCK_RELEASED", "job_id": job_id, "worker_node": worker_uuid},
             )
 
-        return released
+        return bool(released)
 
     async def extend(
         self,
@@ -103,7 +107,7 @@ class LockManager:
         Returns True if extended, False if not owned.
         """
         lock_key = f"lock:job:{job_id}"
-        result = await self._redis.eval(
+        result = await self._redis.eval(  # type: ignore[no-untyped-call]
             _EXTEND_LOCK_SCRIPT, 1, lock_key, worker_uuid, str(ttl_ms)
         )
-        return result == 1
+        return bool(result == 1)

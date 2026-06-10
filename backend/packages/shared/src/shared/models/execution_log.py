@@ -17,13 +17,11 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from shared.models.base import Base
 
 
-class ExecutionLogORM(Base):
+class ExecutionLog(Base):
     """Structured log entry for a job lifecycle event."""
 
     __tablename__ = "execution_logs"
-    __table_args__ = (
-        Index("ix_execution_logs_job_created", "job_id", "created_at"),
-    )
+    __table_args__ = (Index("ix_execution_logs_job_created", "job_id", "created_at"),)
 
     id: Mapped[int] = mapped_column(
         primary_key=True,
@@ -51,16 +49,13 @@ class ExecutionLogORM(Base):
 
     # -- Relationships -------------------------------------------------------
 
-    job: Mapped["JobORM"] = relationship(
-        "JobORM",
+    job: Mapped[Job] = relationship(
+        "Job",
         back_populates="execution_logs",
     )
 
     def __repr__(self) -> str:
-        return (
-            f"<ExecutionLog id={self.id} job={self.job_id!s:.8} "
-            f"event={self.event_type!r}>"
-        )
+        return f"<ExecutionLog id={self.id} job={self.job_id!s:.8} event={self.event_type!r}>"
 
 
-from shared.models.job import JobORM  # noqa: E402, F811
+from shared.models.job import Job  # noqa: E402, F811
