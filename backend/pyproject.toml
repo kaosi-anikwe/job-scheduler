@@ -1,0 +1,27 @@
+[project]
+name = "job-scheduler"
+version = "0.1.0"
+description = "Production-grade background job scheduler with heap-based priority queue, DAG workflows, and distributed locking"
+requires-python = ">=3.12"
+readme = "README.md"
+
+[tool.uv.workspace]
+members = ["packages/*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["shared", "api", "worker"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = [
+    "packages/shared/tests",
+    "packages/api/tests",
+    "packages/worker/tests",
+]
