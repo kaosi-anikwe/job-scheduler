@@ -6,8 +6,6 @@ per system design §6.1.
 
 from __future__ import annotations
 
-from typing import Any
-
 import redis.asyncio as aioredis
 
 from shared.logging import get_logger
@@ -37,7 +35,7 @@ end
 class LockManager:
     """Distributed lock manager using Redis for job claim tokens."""
 
-    def __init__(self, redis_client: aioredis.Redis[Any]) -> None:
+    def __init__(self, redis_client: aioredis.Redis) -> None:  # type: ignore[type-arg]
         self._redis = redis_client
 
     async def acquire(

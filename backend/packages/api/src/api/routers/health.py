@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Any
-
 import redis.asyncio as aioredis
 from fastapi import APIRouter, Depends
 from sqlalchemy import text
@@ -17,7 +15,7 @@ router = APIRouter()
 @router.get("/health", summary="Health check")
 async def health_check(
     db: AsyncSession = Depends(get_db),
-    redis: aioredis.Redis[Any] = Depends(get_redis),
+    redis: aioredis.Redis = Depends(get_redis),  # type: ignore[type-arg]
 ) -> dict[str, str]:
     """Return connectivity status for PostgreSQL and Redis."""
     status: dict[str, str] = {"status": "ok", "database": "ok", "redis": "ok"}

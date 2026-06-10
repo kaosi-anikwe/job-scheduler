@@ -6,8 +6,6 @@ Pub/Sub connection for the worker cancellation listener.
 
 from __future__ import annotations
 
-from typing import Any
-
 import redis.asyncio as aioredis
 
 from shared.config import get_settings
@@ -16,10 +14,10 @@ from shared.config import get_settings
 # Module-level singleton
 # ---------------------------------------------------------------------------
 
-_redis_client: aioredis.Redis[Any] | None = None
+_redis_client: aioredis.Redis | None = None  # type: ignore[type-arg]
 
 
-async def get_redis() -> aioredis.Redis[Any]:
+async def get_redis() -> aioredis.Redis:  # type: ignore[type-arg]
     """Return a shared Redis client backed by a connection pool.
 
     Creates the client on first call and reuses it for the process lifetime.

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from collections.abc import AsyncGenerator
-from typing import Any
 
 import redis.asyncio as aioredis
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -18,6 +17,6 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
         yield session
 
 
-async def get_redis() -> aioredis.Redis[Any]:
+async def get_redis() -> aioredis.Redis:  # type: ignore[type-arg]
     """Return the shared Redis client."""
     return await _get_redis()
