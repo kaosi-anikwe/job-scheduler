@@ -1,0 +1,45 @@
+[Unit]
+Description=Job Scheduler — Worker Process
+Documentation=https://github.com/kaosi-anikwe/job-scheduler
+After=network.target postgresql.service redis.service
+Wants=postgresql.service redis.service
+
+[Service]
+Type=exec
+User=dilamme
+Group=dilamme
+WorkingDirectory=/opt/dilamme-scheduler
+
+# Environment — override via /etc/dilamme/env or EnvironmentFile
+EnvironmentFile=-/etc/dilamme/worker.env
+
+ExecStart=/opt/dilamme-scheduler/deploy/start_worker.sh
+
+# Restart policy — restart on any non-zero exit; worker should be resilient
+Restart=on-failure
+RestartSec=10s
+StartLimitIntervalSec=120s
+StartLimitBurst=5
+
+# Allow graceful shutdown (SIGTERM) up to 30s before SIGKILL
+TimeoutStopSec=30s
+KillMode=mixed
+KillSignal=SIGTERM
+
+# Resource limits
+LimitNOFILE=65536
+
+# Security hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/opt/dilamme-scheduler
+ProtectHome=true
+
+# Logging — captured by journald
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=dilamme-worker
+
+[Install]
+WantedBy=multi-user.target
