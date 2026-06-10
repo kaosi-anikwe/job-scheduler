@@ -1,0 +1,355 @@
+"""Async worker pool — consumes jobs from the scheduler and executes handlers.
+
+Each worker task loops:
+1. Pop from the scheduler (heap or timing wheel)
+2. Acquire a Redis distributed lock
+3. Update status to 'processing'
+4. Dispatch to the appropriate handler
+5. On success: mark completed, handle recurring re-scheduling
+6. On failure: retry with backoff or move to DLQ
+7. Release the lock
+"""
+
+from __future__ import annotations
+
+import asyncio
+import uuid
+from datetime import datetime, timezone, timedelta
+from typing import Any, Optional
+
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from shared.config import get_settings
+from shared.database import get_db_context
+from shared.logging import get_logger
+from shared.models.execution_log import ExecutionLogORM
+from shared.models.job import JobORM
+from shared.redis import get_redis
+
+from worker.executor.lock_manager import LockManager
+from worker.handlers.registry import get_handler
+from worker.recovery.retry import calculate_backoff, should_retry
+from worker.recovery.dlq import move_to_dlq
+from worker.scheduler.heap_scheduler import HeapScheduler, JobNode
+
+logger = get_logger(__name__)
+
+# Mapping of interval strings to timedelta
+INTERVAL_MAP = {
+    "every_1_minute": timedelta(minutes=1),
+    "every_5_minutes": timedelta(minutes=5),
+    "every_1_hour": timedelta(hours=1),
+}
+
+
+class WorkerPool:
+    """Manages a pool of concurrent async worker tasks."""
+
+    def __init__(
+        self,
+        scheduler: HeapScheduler,
+        lock_manager: LockManager,
+        concurrency: int | None = None,
+    ) -> None:
+        settings = get_settings()
+        self._scheduler = scheduler
+        self._lock_manager = lock_manager
+        self._concurrency = concurrency or settings.WORKER_CONCURRENCY
+        self._tasks: list[asyncio.Task] = []
+        self._shutdown_event = asyncio.Event()
+        # Track in-flight jobs for cooperative cancellation
+        self._inflight: dict[str, asyncio.Task] = {}
+        self._inflight_lock = asyncio.Lock()
+
+    async def start(self) -> None:
+        """Start the worker pool."""
+        logger.info(
+            f"Starting worker pool with {self._concurrency} workers",
+            extra={"event": "WORKER_POOL_START"},
+        )
+        for i in range(self._concurrency):
+            worker_id = f"worker_{i}_{uuid.uuid4().hex[:8]}"
+            task = asyncio.create_task(self._worker_loop(worker_id))
+            self._tasks.append(task)
+
+    async def stop(self) -> None:
+        """Gracefully shut down all workers."""
+        logger.info("Shutting down worker pool", extra={"event": "WORKER_POOL_STOP"})
+        self._shutdown_event.set()
+
+        # Cancel all in-flight job tasks
+        async with self._inflight_lock:
+            for job_id, task in self._inflight.items():
+                task.cancel()
+
+        # Wait for all worker loops to finish
+        for task in self._tasks:
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
+
+    async def cancel_job(self, job_id: str) -> bool:
+        """Cooperatively cancel an in-flight job."""
+        async with self._inflight_lock:
+            task = self._inflight.get(job_id)
+            if task:
+                task.cancel()
+                logger.info(
+                    f"Cancellation signal sent for job {job_id}",
+                    extra={"event": "JOB_CANCEL_SIGNAL", "job_id": job_id},
+                )
+                return True
+        return False
+
+    async def _worker_loop(self, worker_id: str) -> None:
+        """Main loop for a single worker — pops jobs and processes them."""
+        logger.info(f"Worker {worker_id} started", extra={"worker_node": worker_id})
+
+        while not self._shutdown_event.is_set():
+            try:
+                node = await self._scheduler.pop()
+                if node is None:
+                    # No work available — back off
+                    await asyncio.sleep(0.5)
+                    continue
+
+                await self._process_job(node, worker_id)
+
+            except asyncio.CancelledError:
+                break
+            except Exception:
+                logger.exception(
+                    f"Unexpected error in worker {worker_id}",
+                    extra={"worker_node": worker_id},
+                )
+                await asyncio.sleep(1)
+
+        logger.info(f"Worker {worker_id} stopped", extra={"worker_node": worker_id})
+
+    async def _process_job(self, node: JobNode, worker_id: str) -> None:
+        """Process a single job: lock → execute → update status."""
+        job_id = node.job_id
+
+        # 1. Acquire distributed lock
+        if not await self._lock_manager.acquire(job_id, worker_id):
+            logger.debug(
+                f"Could not acquire lock for job {job_id} — skipping",
+                extra={"job_id": job_id, "worker_node": worker_id},
+            )
+            return
+
+        try:
+            async with get_db_context() as session:
+                # 2. Load the job and update status to 'processing'
+                result = await session.execute(
+                    select(JobORM).where(JobORM.id == uuid.UUID(job_id))
+                )
+                job = result.scalar_one_or_none()
+
+                if job is None or job.status != "pending":
+                    # Job was cancelled or already picked up
+                    return
+
+                job.status = "processing"
+                await self._log_event(session, job.id, "JOB_STARTED", {
+                    "worker_node": worker_id,
+                })
+                await session.commit()
+
+            # 3. Execute the handler in a tracked task
+            handler = get_handler(node.job_type)
+            if handler is None:
+                raise ValueError(f"No handler registered for job type: {node.job_type}")
+
+            # Create a tracked task for cooperative cancellation
+            exec_task = asyncio.create_task(
+                handler.execute(job_id, node.payload)
+            )
+
+            async with self._inflight_lock:
+                self._inflight[job_id] = exec_task
+
+            try:
+                result_data = await exec_task
+            except asyncio.CancelledError:
+                # Cooperative cancellation — job was cancelled while processing
+                async with get_db_context() as session:
+                    result = await session.execute(
+                        select(JobORM).where(JobORM.id == uuid.UUID(job_id))
+                    )
+                    job = result.scalar_one_or_none()
+                    if job:
+                        job.status = "cancelled"
+                        await self._log_event(session, job.id, "JOB_CANCELLED", {
+                            "worker_node": worker_id,
+                            "reason": "cooperative_cancellation",
+                        })
+                    await session.commit()
+                return
+            finally:
+                async with self._inflight_lock:
+                    self._inflight.pop(job_id, None)
+
+            # 4. Success — mark completed
+            async with get_db_context() as session:
+                result = await session.execute(
+                    select(JobORM).where(JobORM.id == uuid.UUID(job_id))
+                )
+                job = result.scalar_one_or_none()
+                if job:
+                    job.status = "completed"
+                    job.error_details = None
+                    await self._log_event(session, job.id, "JOB_COMPLETED", {
+                        "worker_node": worker_id,
+                        "result": result_data or {},
+                    })
+
+                    # Handle recurring jobs
+                    if job.interval and job.interval in INTERVAL_MAP:
+                        await self._schedule_next_recurrence(job, session)
+
+                await session.commit()
+
+            # Publish completion event via Redis
+            await self._publish_redis_event("JOB_COMPLETED", job_id)
+
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            # 5. Failure — retry or move to DLQ
+            await self._handle_failure(job_id, worker_id, exc)
+        finally:
+            # 6. Always release the lock
+            await self._lock_manager.release(job_id, worker_id)
+
+    async def _handle_failure(
+        self,
+        job_id: str,
+        worker_id: str,
+        error: Exception,
+    ) -> None:
+        """Handle a job execution failure: retry with backoff or move to DLQ."""
+        async with get_db_context() as session:
+            result = await session.execute(
+                select(JobORM).where(JobORM.id == uuid.UUID(job_id))
+            )
+            job = result.scalar_one_or_none()
+            if job is None:
+                return
+
+            job.retry_count += 1
+            error_info = {
+                "error": str(error),
+                "error_type": type(error).__name__,
+                "worker_node": worker_id,
+                "attempt": job.retry_count,
+            }
+            job.error_details = error_info
+
+            if should_retry(job):
+                # Schedule retry with backoff
+                backoff_seconds = calculate_backoff(job.retry_count)
+                job.status = "pending"
+                job.scheduled_at = datetime.now(timezone.utc) + timedelta(seconds=backoff_seconds)
+
+                await self._log_event(session, job.id, "RETRY_ATTEMPTED", {
+                    "worker_node": worker_id,
+                    "attempt": job.retry_count,
+                    "backoff_seconds": backoff_seconds,
+                    "error": str(error),
+                })
+
+                logger.info(
+                    f"Job {job_id} retry #{job.retry_count} scheduled in {backoff_seconds:.1f}s",
+                    extra={"event": "RETRY_ATTEMPTED", "job_id": job_id},
+                )
+            else:
+                # Exhausted retries — move to DLQ
+                await move_to_dlq(job, error, session)
+                await self._log_event(session, job.id, "JOB_FAILED", {
+                    "worker_node": worker_id,
+                    "error": str(error),
+                    "final_retry_count": job.retry_count,
+                    "moved_to_dlq": True,
+                })
+
+                logger.warning(
+                    f"Job {job_id} moved to DLQ after {job.retry_count} attempts",
+                    extra={"event": "JOB_FAILED", "job_id": job_id},
+                )
+
+            await session.commit()
+
+        # Publish failure event via Redis
+        await self._publish_redis_event("JOB_FAILED" if not should_retry(job) else "RETRY_ATTEMPTED", job_id)
+
+    async def _schedule_next_recurrence(
+        self,
+        job: JobORM,
+        session: AsyncSession,
+    ) -> None:
+        """Create the next instance of a recurring job."""
+        interval_delta = INTERVAL_MAP.get(job.interval)
+        if not interval_delta:
+            return
+
+        next_job = JobORM(
+            type=job.type,
+            priority=job.priority,
+            payload=job.payload,
+            scheduled_at=datetime.now(timezone.utc) + interval_delta,
+            interval=job.interval,
+            max_retries=job.max_retries,
+        )
+        session.add(next_job)
+        await session.flush()
+
+        await self._log_event(session, next_job.id, "JOB_CREATED", {
+            "recurring_from": str(job.id),
+            "interval": job.interval,
+            "scheduled_at": next_job.scheduled_at.isoformat(),
+        })
+
+        logger.info(
+            f"Recurring job scheduled: {next_job.id} (from {job.id})",
+            extra={
+                "event": "RECURRING_SCHEDULED",
+                "job_id": str(next_job.id),
+                "parent_job_id": str(job.id),
+            },
+        )
+
+    async def _log_event(
+        self,
+        session: AsyncSession,
+        job_id: uuid.UUID,
+        event_type: str,
+        data: dict[str, Any],
+    ) -> None:
+        """Write an execution log entry."""
+        log = ExecutionLogORM(
+            job_id=job_id,
+            event_type=event_type,
+            log_data=data,
+        )
+        session.add(log)
+
+    async def _publish_redis_event(self, event_type: str, job_id: str) -> None:
+        """Publish an event to Redis for WebSocket broadcasting."""
+        try:
+            redis = await get_redis()
+            import json
+            event = json.dumps({
+                "event": event_type,
+                "job_id": job_id,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            })
+            await redis.publish("jobs:events", event)
+        except Exception:
+            logger.warning(
+                "Failed to publish Redis event",
+                extra={"event": event_type, "job_id": job_id},
+            )
