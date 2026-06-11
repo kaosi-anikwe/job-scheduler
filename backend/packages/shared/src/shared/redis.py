@@ -7,6 +7,7 @@ Pub/Sub connection for the worker cancellation listener.
 from __future__ import annotations
 
 import redis.asyncio as aioredis
+from redis.asyncio.client import PubSub
 
 from shared.config import get_settings
 
@@ -33,7 +34,7 @@ async def get_redis() -> aioredis.Redis:  # type: ignore[type-arg]
     return _redis_client
 
 
-async def get_pubsub() -> aioredis.client.PubSub:
+async def get_pubsub() -> PubSub:
     """Return a fresh Pub/Sub instance from the shared Redis connection pool."""
     client = await get_redis()
     return client.pubsub()

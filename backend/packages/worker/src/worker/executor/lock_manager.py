@@ -15,20 +15,20 @@ logger = get_logger(__name__)
 # Lua script for safe lock release: only delete if the value matches our worker UUID.
 # This prevents a worker from accidentally releasing another worker's lock.
 _RELEASE_LOCK_SCRIPT = """
-if redis.call("GET", KEYS[1]) == ARGV[1] then
-    return redis.call("DEL", KEYS[1])
-else
-    return 0
-end
+    if redis.call("GET", KEYS[1]) == ARGV[1] then
+        return redis.call("DEL", KEYS[1])
+    else
+        return 0
+    end
 """
 
 # Lua script for safe lock extension: only extend TTL if we still own the lock.
 _EXTEND_LOCK_SCRIPT = """
-if redis.call("GET", KEYS[1]) == ARGV[1] then
-    return redis.call("PEXPIRE", KEYS[1], ARGV[2])
-else
-    return 0
-end
+    if redis.call("GET", KEYS[1]) == ARGV[1] then
+        return redis.call("PEXPIRE", KEYS[1], ARGV[2])
+    else
+        return 0
+    end
 """
 
 

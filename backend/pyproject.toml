@@ -15,7 +15,7 @@ target-version = "py312"
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
 ignore = [
-    "B008",   # Depends() in function defaults — standard FastAPI pattern
+    "B008",   # Depends() in function defaults
 ]
 
 [tool.ruff.lint.per-file-ignores]

@@ -23,7 +23,7 @@ class Settings(BaseSettings):
     )
 
     # ── Database ──────────────────────────────────────────
-    DATABASE_URL: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/dilamme_scheduler"
+    DATABASE_URL: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/job_scheduler"
 
     # ── Redis ─────────────────────────────────────────────
     REDIS_URL: str = "redis://localhost:6379/0"

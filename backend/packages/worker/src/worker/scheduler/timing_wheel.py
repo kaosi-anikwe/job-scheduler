@@ -1,10 +1,10 @@
 """Hashed Timing Wheel — alternative scheduling algorithm.
 
-Implements the circular timing wheel from system design §4. This structure
+Implements the circular timing wheel. This structure
 models timer events as buckets in a circular buffer, inspired by the Linux
 kernel's timer infrastructure.
 
-Design (§4.1):
+Design:
     - ``num_slots`` slots in a circular array (default 60)
     - ``tick_duration`` seconds per slot advance (default 1.0s)
     - Jobs map to a slot + remaining_rounds for delays > one full rotation

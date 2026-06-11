@@ -4,7 +4,8 @@ version = "0.1.0"
 description = "Worker process with scheduler, executor, and job handlers for the job scheduler"
 requires-python = ">=3.12"
 dependencies = [
-    "shared"
+    "aiosmtplib>=5.1.1",
+    "shared",
 ]
 
 [tool.uv.sources]

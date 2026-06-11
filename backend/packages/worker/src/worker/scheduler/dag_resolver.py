@@ -29,7 +29,7 @@ async def get_ready_jobs(session: AsyncSession) -> list[Job]:
     - scheduled_at <= NOW()
     - All parent jobs have status = 'completed' (or no parents at all)
 
-    This implements the query from system design §5.1.
+    This implements the query.
     """
     # Raw SQL for performance on the hot path (per system design §2 guidance)
     query = text("""

@@ -1,16 +1,16 @@
 """Heap-based priority queue with starvation prevention.
 
-Implements the min-heap scheduler from system design §3 with a Virtual Rank
+Implements the min-heap scheduler with a Virtual Rank
 Score that ages jobs so that lower-priority jobs eventually overtake newer
 high-priority jobs.
 
-Mathematical model (§3.1):
+Mathematical model:
     V = P_base + α × scheduled_at_timestamp
     where α = 1.0 / 3600.0
 
 A job waiting 1 hour gains a full priority tier upgrade.
 
-3-tier sort order (§3.2):
+3-tier sort order:
     1. Virtual rank (lower = higher priority)
     2. Scheduled time (earlier = higher priority)
     3. Creation time (earlier = higher priority)
@@ -28,7 +28,7 @@ from typing import Any
 class JobNode:
     """A node in the priority heap.
 
-    The ``__lt__`` method implements the 3-tier comparison specified in §3.2.
+    The ``__lt__`` method implements the 3-tier comparison.
     """
 
     job_id: str

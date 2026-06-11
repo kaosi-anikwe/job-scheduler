@@ -46,7 +46,7 @@ def create_app() -> FastAPI:
     settings = get_settings()
 
     app = FastAPI(
-        title="Dilamme Job Scheduler",
+        title="Job Scheduler",
         description="Production-grade background job scheduler with DAG workflows",
         version="0.1.0",
         lifespan=lifespan,
