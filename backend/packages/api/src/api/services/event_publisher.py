@@ -16,13 +16,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from shared.logging import get_logger
 from shared.models.execution_log import ExecutionLog
 from shared.redis import get_redis
+from shared.schemas.execution_log import EventType
 from shared.schemas.websocket import WebSocketEvent
 
 logger = get_logger(__name__)
 
 
 async def publish_event(
-    event_type: str,
+    event_type: EventType,
     job_id: uuid.UUID,
     session: AsyncSession,
     data: dict[str, Any] | None = None,
@@ -32,8 +33,7 @@ async def publish_event(
     Parameters
     ----------
     event_type:
-        One of: JOB_CREATED, JOB_STARTED, RETRY_ATTEMPTED, JOB_FAILED,
-        JOB_CANCELLED, JOB_COMPLETED.
+        The lifecycle event that occurred.
     job_id:
         The UUID of the affected job.
     session:

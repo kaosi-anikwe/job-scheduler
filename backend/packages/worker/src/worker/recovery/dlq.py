@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from shared.config import get_settings
 from shared.logging import get_logger
 from shared.models.job import Job
+from shared.schemas.job import JobStatus
 
 logger = get_logger(__name__)
 
@@ -28,7 +29,7 @@ async def move_to_dlq(
 
     This does NOT commit — the caller manages the transaction.
     """
-    job.status = "failed"
+    job.status = JobStatus.FAILED
     job.error_details = {
         "error": str(error),
         "error_type": type(error).__name__,
@@ -45,7 +46,7 @@ async def get_dlq_count(session: AsyncSession) -> int:
     """Return the number of jobs currently in the DLQ."""
     result = await session.execute(
         select(func.count(Job.id)).where(
-            Job.status == "failed",
+            Job.status == JobStatus.FAILED,
             Job.retry_count >= Job.max_retries,
         )
     )

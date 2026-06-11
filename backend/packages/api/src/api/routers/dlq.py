@@ -12,7 +12,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from api.deps import get_db
 from api.services.event_publisher import publish_event
 from shared.models.job import Job
-from shared.schemas.job import JobResponse
+from shared.schemas.execution_log import EventType
+from shared.schemas.job import JobResponse, JobStatus
 
 router = APIRouter()
 
@@ -27,7 +28,7 @@ async def list_dlq_jobs(db: AsyncSession = Depends(get_db)) -> list[JobResponse]
     result = await db.execute(
         select(Job)
         .where(
-            Job.status == "failed",
+            Job.status == JobStatus.FAILED,
             Job.retry_count >= Job.max_retries,
         )
         .order_by(Job.updated_at.desc())
@@ -53,19 +54,19 @@ async def retry_dlq_job(
     if job is None:
         raise HTTPException(status_code=404, detail="Job not found")
 
-    if job.status != "failed":
+    if job.status != JobStatus.FAILED:
         raise HTTPException(
             status_code=400,
             detail=f"Job is '{job.status}', not 'failed'. Only failed jobs can be retried.",
         )
 
     job.retry_count = 0
-    job.status = "pending"
+    job.status = JobStatus.PENDING
     job.error_details = None
     job.scheduled_at = datetime.now(UTC)
 
     await publish_event(
-        "JOB_RETRIED_FROM_DLQ",
+        EventType.JOB_RETRIED_FROM_DLQ,
         job.id,
         db,
         {"previous_retry_count": job.retry_count},

@@ -11,14 +11,13 @@ Also provides cycle detection for DAG validation.
 
 from __future__ import annotations
 
-import uuid
-from collections import defaultdict
-
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from shared.dag import validate_no_cycles  # re-exported; canonical impl lives in shared
 from shared.models.job import Job
-from shared.models.job_dependency import JobDependency
+
+__all__ = ["get_ready_jobs", "validate_no_cycles"]
 
 
 async def get_ready_jobs(session: AsyncSession) -> list[Job]:
@@ -54,37 +53,3 @@ async def get_ready_jobs(session: AsyncSession) -> list[Job]:
     # Fetch full ORM objects for the ready jobs
     orm_result = await session.execute(select(Job).where(Job.id.in_(ready_ids)))
     return list(orm_result.scalars().all())
-
-
-async def validate_no_cycles(
-    new_job_id: uuid.UUID,
-    parent_ids: list[uuid.UUID],
-    session: AsyncSession,
-) -> bool:
-    """Verify that adding edges ``parent → new_job_id`` doesn't create a cycle.
-
-    Walks upward from each parent through existing dependency edges. If
-    ``new_job_id`` is reachable from any parent, a cycle would be created.
-
-    Returns True if the DAG remains valid, False if a cycle is detected.
-    """
-    result = await session.execute(select(JobDependency))
-    edges = result.scalars().all()
-
-    child_to_parents: dict[uuid.UUID, list[uuid.UUID]] = defaultdict(list)
-    for edge in edges:
-        child_to_parents[edge.child_job_id].append(edge.parent_job_id)
-
-    for parent_id in parent_ids:
-        visited: set[uuid.UUID] = set()
-        stack = [parent_id]
-        while stack:
-            current = stack.pop()
-            if current == new_job_id:
-                return False  # Cycle detected
-            if current in visited:
-                continue
-            visited.add(current)
-            stack.extend(child_to_parents.get(current, []))
-
-    return True

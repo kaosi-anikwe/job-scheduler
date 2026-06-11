@@ -1,6 +1,6 @@
 """Schemas package."""
 
-from shared.schemas.execution_log import ExecutionLogResponse
+from shared.schemas.execution_log import EventType, ExecutionLogResponse
 from shared.schemas.job import (
     DashboardStats,
     JobCreate,
@@ -12,6 +12,7 @@ from shared.schemas.websocket import WebSocketEvent
 
 __all__ = [
     "DashboardStats",
+    "EventType",
     "ExecutionLogResponse",
     "JobCreate",
     "JobListResponse",

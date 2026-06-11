@@ -28,11 +28,13 @@ from shared.logging import get_logger
 from shared.models.execution_log import ExecutionLog
 from shared.models.job import Job
 from shared.redis import get_redis
+from shared.schemas.execution_log import EventType
+from shared.schemas.job import JobStatus
 from worker.executor.lock_manager import LockManager
 from worker.handlers.registry import get_handler
 from worker.recovery.dlq import move_to_dlq
 from worker.recovery.retry import calculate_backoff, should_retry
-from worker.scheduler.heap_scheduler import HeapScheduler, JobNode
+from worker.scheduler.heap_scheduler import BaseScheduler, JobNode
 
 logger = get_logger(__name__)
 
@@ -49,7 +51,7 @@ class WorkerPool:
 
     def __init__(
         self,
-        scheduler: HeapScheduler,
+        scheduler: BaseScheduler,
         lock_manager: LockManager,
         concurrency: int | None = None,
     ) -> None:
@@ -146,15 +148,15 @@ class WorkerPool:
                 result = await session.execute(select(Job).where(Job.id == uuid.UUID(job_id)))
                 job = result.scalar_one_or_none()
 
-                if job is None or job.status != "pending":
+                if job is None or job.status != JobStatus.PENDING:
                     # Job was cancelled or already picked up
                     return
 
-                job.status = "processing"
+                job.status = JobStatus.PROCESSING
                 await self._log_event(
                     session,
                     job.id,
-                    "JOB_STARTED",
+                    EventType.JOB_STARTED,
                     {
                         "worker_node": worker_id,
                     },
@@ -180,11 +182,11 @@ class WorkerPool:
                     result = await session.execute(select(Job).where(Job.id == uuid.UUID(job_id)))
                     job = result.scalar_one_or_none()
                     if job:
-                        job.status = "cancelled"
+                        job.status = JobStatus.CANCELLED
                         await self._log_event(
                             session,
                             job.id,
-                            "JOB_CANCELLED",
+                            EventType.JOB_CANCELLED,
                             {
                                 "worker_node": worker_id,
                                 "reason": "cooperative_cancellation",
@@ -201,12 +203,12 @@ class WorkerPool:
                 result = await session.execute(select(Job).where(Job.id == uuid.UUID(job_id)))
                 job = result.scalar_one_or_none()
                 if job:
-                    job.status = "completed"
+                    job.status = JobStatus.COMPLETED
                     job.error_details = None
                     await self._log_event(
                         session,
                         job.id,
-                        "JOB_COMPLETED",
+                        EventType.JOB_COMPLETED,
                         {
                             "worker_node": worker_id,
                             "result": result_data or {},
@@ -220,8 +222,7 @@ class WorkerPool:
                 await session.commit()
 
             # Publish completion event via Redis
-            await self._publish_redis_event("JOB_COMPLETED", job_id)
-
+            await self._publish_redis_event(EventType.JOB_COMPLETED, job_id)
         except asyncio.CancelledError:
             raise
         except Exception as exc:
@@ -256,13 +257,13 @@ class WorkerPool:
             if should_retry(job):
                 # Schedule retry with backoff
                 backoff_seconds = calculate_backoff(job.retry_count)
-                job.status = "pending"
+                job.status = JobStatus.PENDING
                 job.scheduled_at = datetime.now(UTC) + timedelta(seconds=backoff_seconds)
 
                 await self._log_event(
                     session,
                     job.id,
-                    "RETRY_ATTEMPTED",
+                    EventType.RETRY_ATTEMPTED,
                     {
                         "worker_node": worker_id,
                         "attempt": job.retry_count,
@@ -281,7 +282,7 @@ class WorkerPool:
                 await self._log_event(
                     session,
                     job.id,
-                    "JOB_FAILED",
+                    EventType.JOB_FAILED,
                     {
                         "worker_node": worker_id,
                         "error": str(error),
@@ -298,8 +299,8 @@ class WorkerPool:
             await session.commit()
 
         # Publish failure event via Redis
-        event_type = "JOB_FAILED" if not should_retry(job) else "RETRY_ATTEMPTED"
-        await self._publish_redis_event(event_type, job_id)
+        evt = EventType.JOB_FAILED if not should_retry(job) else EventType.RETRY_ATTEMPTED
+        await self._publish_redis_event(evt, job_id)
 
     async def _schedule_next_recurrence(
         self,
@@ -325,7 +326,7 @@ class WorkerPool:
         await self._log_event(
             session,
             next_job.id,
-            "JOB_CREATED",
+            EventType.JOB_CREATED,
             {
                 "recurring_from": str(job.id),
                 "interval": job.interval,
@@ -346,7 +347,7 @@ class WorkerPool:
         self,
         session: AsyncSession,
         job_id: uuid.UUID,
-        event_type: str,
+        event_type: EventType,
         data: dict[str, Any],
     ) -> None:
         """Write an execution log entry."""
@@ -357,7 +358,7 @@ class WorkerPool:
         )
         session.add(log)
 
-    async def _publish_redis_event(self, event_type: str, job_id: str) -> None:
+    async def _publish_redis_event(self, event_type: EventType, job_id: str) -> None:
         """Publish an event to Redis for WebSocket broadcasting."""
         try:
             redis = await get_redis()

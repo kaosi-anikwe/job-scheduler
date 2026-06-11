@@ -21,7 +21,7 @@ from __future__ import annotations
 import asyncio
 import heapq
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Protocol
 
 
 @dataclass(order=False)
@@ -62,6 +62,24 @@ class JobNode:
 
     def __hash__(self) -> int:
         return hash(self.job_id)
+
+
+class BaseScheduler(Protocol):
+    """Protocol for pop-based priority schedulers consumed by WorkerPool.
+
+    Both ``HeapScheduler`` and any future pop-based implementation satisfy
+    this protocol.  ``HashedTimingWheel`` uses a different (tick-based)
+    interface and is **not** interchangeable with ``BaseScheduler`` — it acts
+    as a feed into the heap inside the scheduler loop, not as a direct
+    replacement for the heap consumed by the worker pool.
+    """
+
+    async def push(self, node: JobNode) -> None: ...
+    async def pop(self) -> JobNode | None: ...
+    async def peek(self) -> JobNode | None: ...
+    async def size(self) -> int: ...
+    async def remove(self, job_id: str) -> bool: ...
+    async def clear(self) -> None: ...
 
 
 class HeapScheduler:

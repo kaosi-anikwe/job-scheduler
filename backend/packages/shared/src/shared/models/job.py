@@ -11,10 +11,12 @@ from datetime import datetime
 from typing import Any
 
 from sqlalchemy import DateTime, Index, SmallInteger, String, func, text
+from sqlalchemy import Enum as SAEnum
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from shared.models.base import Base, TimestampMixin
+from shared.schemas.job import JobStatus
 
 
 class Job(TimestampMixin, Base):
@@ -38,8 +40,8 @@ class Job(TimestampMixin, Base):
         nullable=False,
         server_default=text("2"),
     )
-    status: Mapped[str] = mapped_column(
-        String(20),
+    status: Mapped[JobStatus] = mapped_column(
+        SAEnum(JobStatus, native_enum=False, length=20),
         nullable=False,
         server_default=text("'pending'"),
     )

@@ -10,11 +10,13 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import DateTime, ForeignKey, Index, String, func, text
+from sqlalchemy import DateTime, ForeignKey, Index, func, text
+from sqlalchemy import Enum as SAEnum
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from shared.models.base import Base
+from shared.schemas.execution_log import EventType
 
 
 class ExecutionLog(Base):
@@ -32,8 +34,8 @@ class ExecutionLog(Base):
         ForeignKey("jobs.id", ondelete="CASCADE"),
         nullable=False,
     )
-    event_type: Mapped[str] = mapped_column(
-        String(50),
+    event_type: Mapped[EventType] = mapped_column(
+        SAEnum(EventType, native_enum=False, length=50),
         nullable=False,
     )
     log_data: Mapped[dict[str, Any]] = mapped_column(

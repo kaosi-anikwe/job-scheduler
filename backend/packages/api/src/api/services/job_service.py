@@ -3,22 +3,24 @@
 from __future__ import annotations
 
 import uuid
-from collections import defaultdict
 from datetime import UTC, datetime
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.services.event_publisher import publish_event
+from shared.dag import validate_no_cycles
 from shared.logging import get_logger
 from shared.models.execution_log import ExecutionLog
 from shared.models.job import Job
 from shared.models.job_dependency import JobDependency
+from shared.schemas.execution_log import EventType
 from shared.schemas.job import (
     DashboardStats,
     JobCreate,
     JobListResponse,
     JobResponse,
+    JobStatus,
 )
 
 logger = get_logger(__name__)
@@ -55,7 +57,7 @@ async def create_job(data: JobCreate, session: AsyncSession) -> Job:
             raise ValueError(f"Parent job IDs not found: {missing}")
 
         # Validate no cycles
-        if not await _validate_dag(job.id, data.dependency_ids, session):
+        if not await validate_no_cycles(job.id, data.dependency_ids, session):
             raise ValueError("Adding these dependencies would create a cycle in the DAG")
 
         for parent_id in data.dependency_ids:
@@ -64,7 +66,7 @@ async def create_job(data: JobCreate, session: AsyncSession) -> Job:
 
     # Publish creation event
     await publish_event(
-        "JOB_CREATED",
+        EventType.JOB_CREATED,
         job.id,
         session,
         {"type": data.type, "priority": data.priority.value},
@@ -133,16 +135,16 @@ async def cancel_job(
     if job is None:
         raise ValueError(f"Job {job_id} not found")
 
-    if job.status not in ("pending", "processing"):
+    if job.status not in (JobStatus.PENDING, JobStatus.PROCESSING):
         raise ValueError(
             f"Cannot cancel job in '{job.status}' status. "
             "Only 'pending' or 'processing' jobs can be cancelled."
         )
 
-    was_processing = job.status == "processing"
-    job.status = "cancelled"
+    was_processing = job.status == JobStatus.PROCESSING
+    job.status = JobStatus.CANCELLED
 
-    await publish_event("JOB_CANCELLED", job.id, session)
+    await publish_event(EventType.JOB_CANCELLED, job.id, session)
 
     # If the job was processing, broadcast a cancellation signal via Redis
     if was_processing:
@@ -163,14 +165,14 @@ async def cancel_job(
 async def get_dashboard_stats(session: AsyncSession) -> DashboardStats:
     """Return job counts grouped by status."""
     result = await session.execute(select(Job.status, func.count(Job.id)).group_by(Job.status))
-    counts: dict[str, int] = {row[0]: row[1] for row in result.all()}
+    counts: dict[JobStatus, int] = {row[0]: row[1] for row in result.all()}
 
     stats = DashboardStats(
-        pending=counts.get("pending", 0),
-        processing=counts.get("processing", 0),
-        completed=counts.get("completed", 0),
-        failed=counts.get("failed", 0),
-        cancelled=counts.get("cancelled", 0),
+        pending=counts.get(JobStatus.PENDING, 0),
+        processing=counts.get(JobStatus.PROCESSING, 0),
+        completed=counts.get(JobStatus.COMPLETED, 0),
+        failed=counts.get(JobStatus.FAILED, 0),
+        cancelled=counts.get(JobStatus.CANCELLED, 0),
     )
     stats.total = sum(
         [
@@ -195,43 +197,3 @@ async def get_job_logs(
         .order_by(ExecutionLog.created_at.asc())
     )
     return list(result.scalars().all())
-
-
-# ---------------------------------------------------------------------------
-# DAG validation
-# ---------------------------------------------------------------------------
-
-
-async def _validate_dag(
-    new_job_id: uuid.UUID,
-    parent_ids: list[uuid.UUID],
-    session: AsyncSession,
-) -> bool:
-    """Check that adding edges parent→new_job_id does not create a cycle.
-
-    Uses DFS from each parent, walking *upward* through existing parent edges,
-    to verify the new_job_id is not an ancestor of any proposed parent.
-    """
-    # Build adjacency: child → [parents]
-    result = await session.execute(select(JobDependency))
-    edges = result.scalars().all()
-
-    child_to_parents: dict[uuid.UUID, list[uuid.UUID]] = defaultdict(list)
-    for edge in edges:
-        child_to_parents[edge.child_job_id].append(edge.parent_job_id)
-
-    # Check: is new_job_id reachable from any parent by walking upward?
-    # If so, adding parent→new_job_id would create a cycle.
-    for parent_id in parent_ids:
-        visited: set[uuid.UUID] = set()
-        stack = [parent_id]
-        while stack:
-            current = stack.pop()
-            if current == new_job_id:
-                return False  # Cycle detected
-            if current in visited:
-                continue
-            visited.add(current)
-            stack.extend(child_to_parents.get(current, []))
-
-    return True  # No cycles

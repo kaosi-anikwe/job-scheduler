@@ -12,13 +12,15 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from shared.schemas.execution_log import EventType
+
 
 class WebSocketEvent(BaseModel):
     """Real-time event broadcast via WebSocket."""
 
-    event: str = Field(
+    event: EventType = Field(
         ...,
-        description="Event type, e.g. JOB_CREATED, JOB_STARTED, JOB_COMPLETED",
+        description="Job lifecycle event type.",
     )
     job_id: uuid.UUID
     data: dict[str, Any] = Field(default_factory=dict)
