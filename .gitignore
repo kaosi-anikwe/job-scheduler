@@ -36,3 +36,5 @@ alembic/versions/__pycache__/
 # Spec documents
 system_design.md
 task_description.md
+task.md
+implementation_plan.md
