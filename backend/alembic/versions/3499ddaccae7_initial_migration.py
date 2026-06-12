@@ -29,11 +29,11 @@ def upgrade() -> None:
         sa.Column(
             "status",
             sa.Enum(
-                "PENDING",
-                "PROCESSING",
-                "COMPLETED",
-                "FAILED",
-                "CANCELLED",
+                "pending",
+                "processing",
+                "completed",
+                "failed",
+                "cancelled",
                 name="jobstatus",
                 native_enum=False,
                 length=20,

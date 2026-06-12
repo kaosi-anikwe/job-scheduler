@@ -8,7 +8,7 @@ from datetime import UTC, datetime
 import pytest
 from pydantic import ValidationError
 
-from shared.schemas.execution_log import ExecutionLogResponse
+from shared.schemas.execution_log import EventType, ExecutionLogResponse
 from shared.schemas.job import (
     DashboardStats,
     JobCreate,
@@ -205,7 +205,7 @@ class TestExecutionLogResponse:
         resp = ExecutionLogResponse(
             id=1,
             job_id=uuid.uuid4(),
-            event_type="JOB_STARTED",
+            event_type=EventType.JOB_STARTED,
             log_data={"worker_node": "w1"},
             created_at=now,
         )

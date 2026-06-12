@@ -46,14 +46,12 @@ function Bay({ index, worker }: { index: number; worker: WorkerState | null }) {
           {worker?.worker_id ?? `worker-${index + 1}`}
         </span>
         <span
-          className={`ml-auto inline-flex items-center gap-1 text-xs ${
-            running ? 'text-warning' : 'text-base-content/40'
-          }`}
+          className={`ml-auto inline-flex items-center gap-1 text-xs ${running ? 'text-warning' : 'text-base-content/40'
+            }`}
         >
           <span
-            className={`size-1.5 rounded-full ${
-              running ? 'bg-warning animate-pulse' : 'bg-base-content/30'
-            }`}
+            className={`size-1.5 rounded-full ${running ? 'bg-warning animate-pulse' : 'bg-base-content/30'
+              }`}
           />
           {running ? 'running' : worker ? 'idle' : 'offline'}
         </span>
