@@ -136,11 +136,11 @@ sudo systemctl status api worker
 ### 5. Nginx (Reverse Proxy + HTTPS)
 
 ```bash
-# Copy the nginx config
+# Copy the site config
 sudo cp /opt/dilamme-scheduler/deploy/nginx.conf /etc/nginx/sites-available/dilamme
 sudo ln -s /etc/nginx/sites-available/dilamme /etc/nginx/sites-enabled/
 
-# Edit the server_name in nginx.conf to match your domain
+# Edit the server_name to match your domain
 sudo nano /etc/nginx/sites-available/dilamme
 
 # Test and reload
