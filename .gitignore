@@ -7,6 +7,18 @@ __pycache__/
 dist/
 build/
 
+# Node / React / Vite
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+*.local
+
+# Vite
+vite.svg
+.vite/
+
 # Virtual environments
 .venv/
 venv/
@@ -33,8 +45,12 @@ htmlcov/
 # Alembic
 alembic/versions/__pycache__/
 
+
+
 # Spec documents
 system_design.md
 task_description.md
 task.md
 implementation_plan.md
+frontend_design.md
+frontend_guide.md

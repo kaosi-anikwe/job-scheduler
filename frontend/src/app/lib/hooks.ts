@@ -1,0 +1,120 @@
+import { useState, useEffect, useCallback } from 'react';
+import { useWebSocket } from './websocket';
+import {
+  fetchJobs,
+  fetchDashboardStats,
+  fetchDlqJobs,
+  createJob,
+  cancelJob,
+  retryDlqJob,
+} from './services';
+import type { JobResponse, JobCreate, DashboardStats } from './services';
+
+/* ------------------------------------------------------------------ */
+/* Jobs hook — polled list with WS-driven splicing                    */
+/* ------------------------------------------------------------------ */
+
+export function useJobs(initialFilter?: { status?: string }) {
+  const [jobs, setJobs] = useState<JobResponse[]>([]);
+  const [loading, setLoading] = useState(true);
+  const { lastMessage } = useWebSocket();
+
+  const refresh = useCallback(async () => {
+    const res = await fetchJobs({ status: initialFilter?.status, limit: 200 });
+    if (res.data) {
+      setJobs(res.data.jobs);
+    }
+    setLoading(false);
+  }, [initialFilter?.status]);
+
+  // Initial fetch
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
+
+  // WebSocket splicing: when a job state changes, update the row in place
+  useEffect(() => {
+    if (!lastMessage || lastMessage.event !== 'JOB_STATE_CHANGED') return;
+    const { job_id, data } = lastMessage;
+    setJobs((prev) =>
+      prev.map((j) =>
+        j.id === job_id
+          ? { ...j, status: (data.new_status as string) ?? j.status, retry_count: (data.retry_count as number) ?? j.retry_count }
+          : j,
+      ),
+    );
+  }, [lastMessage]);
+
+  return { jobs, loading, refresh };
+}
+
+/* ------------------------------------------------------------------ */
+/* Dashboard stats hook                                                */
+/* ------------------------------------------------------------------ */
+
+export function useStats() {
+  const [stats, setStats] = useState<DashboardStats>({ pending: 0, processing: 0, completed: 0, failed: 0, cancelled: 0, total: 0 });
+  const { lastMessage } = useWebSocket();
+
+  const refresh = useCallback(async () => {
+    try {
+      const res = await fetchDashboardStats();
+      if (res.data) setStats(res.data);
+    } catch { /* ignore */ }
+  }, []);
+
+  useEffect(() => { refresh(); }, [refresh]);
+
+  // Refresh stats on any WS event
+  useEffect(() => {
+    if (lastMessage) refresh();
+  }, [lastMessage, refresh]);
+
+  return { stats, refresh };
+}
+
+/* ------------------------------------------------------------------ */
+/* DLQ hook                                                             */
+/* ------------------------------------------------------------------ */
+
+export function useDlq() {
+  const [dlqJobs, setDlqJobs] = useState<JobResponse[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const refresh = useCallback(async () => {
+    try {
+      const res = await fetchDlqJobs();
+      if (res.data) setDlqJobs(res.data);
+    } catch { /* ignore */ }
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { refresh(); }, [refresh]);
+
+  return { dlqJobs, loading, refresh };
+}
+
+/* ------------------------------------------------------------------ */
+/* Mutation helpers                                                     */
+/* ------------------------------------------------------------------ */
+
+export function useCreateJob() {
+  const [loading, setLoading] = useState(false);
+
+  const submit = async (data: JobCreate) => {
+    setLoading(true);
+    const res = await createJob(data);
+    setLoading(false);
+    return res;
+  };
+
+  return { submit, loading };
+}
+
+export function useCancelJob() {
+  return async (jobId: string) => cancelJob(jobId);
+}
+
+export function useRetryDlqJob() {
+  return async (jobId: string) => retryDlqJob(jobId);
+}
