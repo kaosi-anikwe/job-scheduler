@@ -10,8 +10,8 @@ User=ubuntu
 Group=ubuntu
 WorkingDirectory=/opt/dilamme-scheduler
 
-# Environment — override via /etc/dilamme/env or EnvironmentFile
-EnvironmentFile=-/etc/dilamme/worker.env
+# Environment — project's backend/.env file
+EnvironmentFile=-/opt/dilamme-scheduler/backend/.env
 Environment=PATH=/usr/local/bin:/usr/bin:/bin:/home/ubuntu/.local/bin
 
 ExecStart=/opt/dilamme-scheduler/deploy/start_worker.sh
