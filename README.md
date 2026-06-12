@@ -64,7 +64,7 @@ npm run dev            # Starts Vite dev server on :5173, proxies /api → :8000
 
 ## Production Deployment
 
-Assumes a **fresh Ubuntu 24.04 LTS** instance.  Adjust paths and hostnames
+Assumes a **fresh Ubuntu 24.04 LTS** instance. Adjust paths and hostnames
 as needed.
 
 ### 1. System Dependencies
@@ -193,12 +193,12 @@ cd /opt/dilamme-scheduler/frontend && npm install && npm run build
 
 All configuration lives in `/opt/dilamme-scheduler/backend/.env`:
 
-| Variable              | Default                  | Description                          |
-| --------------------- | ------------------------ | ------------------------------------ |
-| `DATABASE_URL`        | (required)               | PostgreSQL connection string          |
-| `REDIS_URL`           | `redis://localhost:6379` | Redis connection string               |
-| `WORKER_CONCURRENCY`  | `4`                      | Number of worker tasks                |
-| `SCHEDULER_ENGINE`    | `heap`                   | `heap` or `timing_wheel`              |
-| `DLQ_ALERT_THRESHOLD` | `10`                     | DLQ size that triggers email alert    |
-| `DLQ_ALERT_EMAIL`     | (required)               | Where DLQ alerts are sent             |
-| `LOG_LEVEL`           | `INFO`                   | Log level for all components          |
+| Variable              | Default                  | Description                        |
+| --------------------- | ------------------------ | ---------------------------------- |
+| `DATABASE_URL`        | (required)               | PostgreSQL connection string       |
+| `REDIS_URL`           | `redis://localhost:6379` | Redis connection string            |
+| `WORKER_CONCURRENCY`  | `4`                      | Number of worker tasks             |
+| `SCHEDULER_ENGINE`    | `heap`                   | `heap` or `timing_wheel`           |
+| `DLQ_ALERT_THRESHOLD` | `10`                     | DLQ size that triggers email alert |
+| `DLQ_ALERT_EMAIL`     | (required)               | Where DLQ alerts are sent          |
+| `LOG_LEVEL`           | `INFO`                   | Log level for all components       |
