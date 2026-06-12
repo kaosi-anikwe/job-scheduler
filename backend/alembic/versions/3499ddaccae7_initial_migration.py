@@ -28,16 +28,7 @@ def upgrade() -> None:
         sa.Column("priority", sa.SmallInteger(), server_default=sa.text("2"), nullable=False),
         sa.Column(
             "status",
-            sa.Enum(
-                "pending",
-                "processing",
-                "completed",
-                "failed",
-                "cancelled",
-                name="jobstatus",
-                native_enum=False,
-                length=20,
-            ),
+            sa.String(length=20),
             server_default=sa.text("'pending'"),
             nullable=False,
         ),
