@@ -59,17 +59,24 @@ src/
 cd frontend
 npm install
 
-# Regenerate the API SDK from the backend's OpenAPI schema
-# Make sure the backend is running on localhost:8000 first
-curl http://localhost:8000/openapi.json -o openapi.json
-npm run generate-api
-
-# Start the dev server (proxies /api → localhost:8000, /ws → ws://localhost:8000)
+# Start the dev server (auto-generates SDK from running backend, then proxies /api → :8000)
 npm run dev
 
-# Production build
+# Production build (auto-generates SDK first)
+npm run build
+
+# Manual SDK regeneration (when the backend is running)
+npm run generate-api
+
+# CI: first copy openapi.json into place, then build without a running backend
+npm run generate-api:ci
 npm run build
 ```
+
+> **Note:** `src/sdk/` and `openapi.json` are `.gitignore`d. They are generated
+> fresh on every `dev`/`build`. The backend must be running on `localhost:8000`
+> for local development. For CI, provide `openapi.json` separately and use
+> `generate-api:ci`.
 
 ## Key Design Decisions
 

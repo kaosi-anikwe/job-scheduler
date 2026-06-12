@@ -4,10 +4,11 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "build": "vite build",
-    "dev": "vite",
+    "build": "npm run generate-api && vite build",
+    "dev": "npm run generate-api && vite",
     "lint": "tsc --noEmit",
-    "generate-api": "openapi-ts -i ./openapi.json -o ./src/sdk -c @hey-api/client-fetch"
+    "generate-api": "curl -s http://localhost:8000/openapi.json -o openapi.json && openapi-ts -i ./openapi.json -o ./src/sdk -c @hey-api/client-fetch",
+    "generate-api:ci": "openapi-ts -i ./openapi.json -o ./src/sdk -c @hey-api/client-fetch"
   },
   "dependencies": {
     "@hey-api/client-fetch": "^0.9.0",

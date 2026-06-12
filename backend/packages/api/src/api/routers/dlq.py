@@ -18,7 +18,9 @@ from shared.schemas.job import JobResponse, JobStatus
 router = APIRouter()
 
 
-@router.get("/dlq", response_model=list[JobResponse], summary="List DLQ jobs")
+@router.get(
+    "/dlq", response_model=list[JobResponse], summary="List DLQ jobs", operation_id="list_dlq_jobs"
+)
 async def list_dlq_jobs(db: AsyncSession = Depends(get_db)) -> list[JobResponse]:
     """List all jobs that have exhausted their retries (dead-letter queue).
 
@@ -37,7 +39,12 @@ async def list_dlq_jobs(db: AsyncSession = Depends(get_db)) -> list[JobResponse]
     return [JobResponse.model_validate(j) for j in jobs]
 
 
-@router.post("/dlq/{job_id}/retry", response_model=JobResponse, summary="Retry a DLQ job")
+@router.post(
+    "/dlq/{job_id}/retry",
+    response_model=JobResponse,
+    summary="Retry a DLQ job",
+    operation_id="retry_dlq_job",
+)
 async def retry_dlq_job(
     job_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),

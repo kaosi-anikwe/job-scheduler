@@ -12,7 +12,7 @@ from api.deps import get_db, get_redis
 router = APIRouter()
 
 
-@router.get("/health", summary="Health check")
+@router.get("/health", summary="Health check", operation_id="health_check")
 async def health_check(
     db: AsyncSession = Depends(get_db),
     redis: aioredis.Redis = Depends(get_redis),  # type: ignore[type-arg]

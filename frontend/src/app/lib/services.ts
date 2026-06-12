@@ -1,12 +1,12 @@
 import {
-  listJobsApiV1JobsGet,
-  createJobApiV1JobsPost,
-  getJobApiV1JobsJobIdGet,
-  cancelJobApiV1JobsJobIdCancelPatch,
-  getJobLogsApiV1JobsJobIdLogsGet,
-  dashboardStatsApiV1JobsDashboardStatsGet,
-  listDlqJobsApiV1DlqGet,
-  retryDlqJobApiV1DlqJobIdRetryPost,
+  listJobs as listJobsSdk,
+  createJob as createJobSdk,
+  getJob as getJobSdk,
+  cancelJob as cancelJobSdk,
+  getJobLogs as getJobLogsSdk,
+  dashboardStats as dashboardStatsSdk,
+  listDlqJobs as listDlqJobsSdk,
+  retryDlqJob as retryDlqJobSdk,
 } from '../../sdk/sdk.gen';
 import type {
   JobResponse,
@@ -28,7 +28,7 @@ export function fetchJobs(params?: {
   offset?: number;
   limit?: number;
 }) {
-  return listJobsApiV1JobsGet({
+  return listJobsSdk({
     client: apiClient,
     query: {
       status: params?.status ?? null,
@@ -41,28 +41,28 @@ export function fetchJobs(params?: {
 }
 
 export function createJob(data: JobCreate) {
-  return createJobApiV1JobsPost({
+  return createJobSdk({
     client: apiClient,
     body: data,
   });
 }
 
 export function fetchJob(jobId: string) {
-  return getJobApiV1JobsJobIdGet({
+  return getJobSdk({
     client: apiClient,
     path: { job_id: jobId },
   });
 }
 
 export function cancelJob(jobId: string) {
-  return cancelJobApiV1JobsJobIdCancelPatch({
+  return cancelJobSdk({
     client: apiClient,
     path: { job_id: jobId },
   });
 }
 
 export function fetchJobLogs(jobId: string) {
-  return getJobLogsApiV1JobsJobIdLogsGet({
+  return getJobLogsSdk({
     client: apiClient,
     path: { job_id: jobId },
   });
@@ -73,7 +73,7 @@ export function fetchJobLogs(jobId: string) {
 /* ------------------------------------------------------------------ */
 
 export function fetchDashboardStats() {
-  return dashboardStatsApiV1JobsDashboardStatsGet({ client: apiClient });
+  return dashboardStatsSdk({ client: apiClient });
 }
 
 /* ------------------------------------------------------------------ */
@@ -81,11 +81,11 @@ export function fetchDashboardStats() {
 /* ------------------------------------------------------------------ */
 
 export function fetchDlqJobs() {
-  return listDlqJobsApiV1DlqGet({ client: apiClient });
+  return listDlqJobsSdk({ client: apiClient });
 }
 
 export function retryDlqJob(jobId: string) {
-  return retryDlqJobApiV1DlqJobIdRetryPost({
+  return retryDlqJobSdk({
     client: apiClient,
     path: { job_id: jobId },
   });

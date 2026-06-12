@@ -45,9 +45,9 @@ htmlcov/
 # Alembic
 alembic/versions/__pycache__/
 
-
-
-# Spec documents
+# Generated API spec / SDK (run `npm run generate-api` to produce)
+frontend/openapi.json
+frontend/src/sdk/
 system_design.md
 task_description.md
 task.md

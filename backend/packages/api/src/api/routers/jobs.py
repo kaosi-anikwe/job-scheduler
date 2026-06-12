@@ -20,7 +20,13 @@ from shared.schemas.job import (
 router = APIRouter()
 
 
-@router.post("/jobs", response_model=JobResponse, status_code=201, summary="Create a job")
+@router.post(
+    "/jobs",
+    response_model=JobResponse,
+    status_code=201,
+    summary="Create a job",
+    operation_id="create_job",
+)
 async def create_job(
     data: JobCreate,
     db: AsyncSession = Depends(get_db),
@@ -37,7 +43,7 @@ async def create_job(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
-@router.get("/jobs", response_model=JobListResponse, summary="List jobs")
+@router.get("/jobs", response_model=JobListResponse, summary="List jobs", operation_id="list_jobs")
 async def list_jobs(
     status: str | None = Query(None, description="Filter by status"),
     type: str | None = Query(None, alias="type", description="Filter by job type"),
@@ -61,13 +67,16 @@ async def list_jobs(
     "/jobs/dashboard/stats",
     response_model=DashboardStats,
     summary="Dashboard stats",
+    operation_id="dashboard_stats",
 )
 async def dashboard_stats(db: AsyncSession = Depends(get_db)) -> DashboardStats:
     """Return job counts grouped by status for the dashboard view."""
     return await job_service.get_dashboard_stats(db)
 
 
-@router.get("/jobs/{job_id}", response_model=JobResponse, summary="Get job details")
+@router.get(
+    "/jobs/{job_id}", response_model=JobResponse, summary="Get job details", operation_id="get_job"
+)
 async def get_job(
     job_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
@@ -79,7 +88,12 @@ async def get_job(
     return JobResponse.model_validate(job)
 
 
-@router.patch("/jobs/{job_id}/cancel", response_model=JobResponse, summary="Cancel a job")
+@router.patch(
+    "/jobs/{job_id}/cancel",
+    response_model=JobResponse,
+    summary="Cancel a job",
+    operation_id="cancel_job",
+)
 async def cancel_job(
     job_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
@@ -100,6 +114,7 @@ async def cancel_job(
     "/jobs/{job_id}/logs",
     response_model=list[ExecutionLogResponse],
     summary="Get job execution logs",
+    operation_id="get_job_logs",
 )
 async def get_job_logs(
     job_id: uuid.UUID,

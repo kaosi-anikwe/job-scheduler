@@ -46,8 +46,6 @@ class Settings(BaseSettings):
     LOG_LEVEL: str = "INFO"
 
     # ── API ───────────────────────────────────────────────
-    API_HOST: str = "0.0.0.0"
-    API_PORT: int = 8000
     CORS_ORIGINS: list[str] = ["http://localhost:3000", "http://localhost:5173"]
 
     @field_validator("CORS_ORIGINS", mode="before")

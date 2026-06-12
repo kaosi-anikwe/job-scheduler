@@ -30,6 +30,7 @@ async def get_redis() -> aioredis.Redis:  # type: ignore[type-arg]
             settings.REDIS_URL,
             decode_responses=True,
             max_connections=20,
+            socket_timeout=None,  # Disabled for Pub/Sub — keepalive handles dead connections
         )
     return _redis_client
 
