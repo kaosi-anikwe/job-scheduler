@@ -57,7 +57,7 @@ export function LogsPanel() {
             {status === 'OPEN' ? 'Live' : status === 'CONNECTING' ? 'Connecting' : 'Offline'}
           </span>
         </div>
-        <div className="overflow-y-auto max-h-[560px] font-mono text-xs flex flex-col gap-1 pr-1">
+        <div className="overflow-y-auto max-h-140 font-mono text-xs flex flex-col gap-1 pr-1">
           {logs.map((l) => (
             <div
               key={l.id}

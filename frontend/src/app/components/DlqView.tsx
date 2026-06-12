@@ -77,7 +77,7 @@ function DeadJob({
 }) {
   return (
     <div className="collapse collapse-arrow bg-base-200 border border-error/30 rounded-box">
-      <input type="checkbox" />
+      <input title="collapse" type="checkbox" />
       <div className="collapse-title flex items-center gap-3 flex-wrap pr-12">
         <span className="badge badge-ghost font-mono text-xs">{shortId(job.id)}</span>
         <span className="font-medium">{JOB_TYPE_LABEL[job.type] ?? job.type}</span>

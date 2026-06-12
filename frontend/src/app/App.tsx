@@ -7,7 +7,7 @@ import { DlqView } from './components/DlqView';
 
 export default function App() {
   return (
-    <div data-theme="dim" className="size-full bg-base-100 text-base-content">
+    <div className="size-full bg-base-100 text-base-content">
       <WebSocketProvider>
         <BrowserRouter>
           <Routes>
