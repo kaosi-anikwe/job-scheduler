@@ -1,21 +1,16 @@
-# Architecture Document — Dilamme Background Job Scheduler
-
-**Author:** Junior Systems Engineer
-**Date:** 12 June 2026
-**Repository:** https://github.com/kaosi-anikwe/job-scheduler
-
----
+# Architecture Document
 
 ## 1. Executive Summary
 
-The Dilamme Background Job Scheduler is a production-grade asynchronous job
-execution platform designed for self-managed bare-metal deployment.  It decouples
+The Background Job Scheduler is a production-grade asynchronous job
+execution platform designed for self-managed bare-metal deployment. It decouples
 job submission (FastAPI), scheduling (heap or timing wheel), execution
 (independent worker pool), and observability (WebSocket-driven React dashboard)
 into isolated processes that communicate through PostgreSQL (source of truth) and
 Redis (lock manager + pub/sub bus).
 
 The system guarantees:
+
 - **No double-allocation** — Redis-based distributed locks with Lua-script-safe release
 - **Starvation prevention** — virtual-rank aging formula that promotes long-waiting jobs
 - **Crash resilience** — all state is durable in PostgreSQL; memory loss never corrupts jobs
@@ -29,51 +24,52 @@ The system guarantees:
 
 ```
                          ┌──────────────────┐
-                         │   React SPA       │
-                         │  (Vite + daisyUI) │
+                         │   React SPA      │
+                         │ (Vite + daisyUI) │
                          └──────┬───────────┘
                                 │ HTTPS (wss:// for WS)
                          ┌──────┴───────────┐
-                         │   Nginx           │
-                         │  Reverse Proxy    │
-                         │  HTTP/2 + TLS     │
+                         │   Nginx          │
+                         │  Reverse Proxy   │
+                         │  HTTP/2 + TLS    │
                          └──────┬───────────┘
                                 │
               ┌─────────────────┼─────────────────┐
-              │ /api/*  /docs   │ /ws/*            │ / (static)
-              ▼                 ▼                  ▼
-    ┌──────────────┐  ┌──────────────┐  ┌──────────────┐
-    │  FastAPI API  │  │  FastAPI WS  │  │  Vite Build   │
-    │  (uvicorn)    │  │  Endpoint    │  │  Static Files │
-    └──────┬───────┘  └──────┬───────┘  └──────────────┘
-           │                 │
-    ┌──────┼─────────────────┼──────────────────────┐
-    │      ▼                 ▼                      │
-    │  ┌─────────┐    ┌─────────────┐               │
-    │  │PostgreSQL│    │   Redis     │               │
-    │  │ (state)  │    │(locks+pubsub)│              │
-    │  └────▲─────┘    └──────┬──────┘               │
-    │       │                 │                      │
-    │  ┌────┴─────────────────┴─────┐                │
-    │  │       Worker Process        │               │
-    │  │  ┌───────────────────────┐ │               │
-    │  │  │   Scheduler Loop      │ │               │
-    │  │  │  (heap or timing wheel)│ │               │
-    │  │  └──────────┬────────────┘ │               │
-    │  │             ▼              │               │
-    │  │  ┌───────────────────────┐ │               │
-    │  │  │   Worker Pool (×N)    │ │               │
-    │  │  │  Lock → Execute → Log │ │               │
-    │  │  └───────────────────────┘ │               │
-    │  │  ┌───────────────────────┐ │               │
-    │  │  │  Recovery: Retry/DLQ  │ │               │
-    │  │  │  Cancellation Listener│ │               │
-    │  │  └───────────────────────┘ │               │
-    │  └────────────────────────────┘               │
-    └───────────────────────────────────────────────┘
+              │ /api/*  /docs   │ /ws/*           │ / (static)
+              ▼                 ▼                 ▼
+       ┌──────────────┐  ┌──────────────┐  ┌──────────────┐
+       │  FastAPI API │  │  FastAPI WS  │  │  Vite Build  │
+       │  (uvicorn)   │  │  Endpoint    │  │  Static Files│
+       └──────┬───────┘  └──────┬───────┘  └──────────────┘
+              │                 │
+       ┌──────┼─────────────────┼───────────┐
+       │      ▼                 ▼           │
+       │  ┌──────────┐    ┌──────────────┐  │
+       │  │PostgreSQL│    │    Redis     │  │
+       │  │ (state)  │    │(locks+pubsub)│  │
+       │  └────▲─────┘    └──────┬───────┘  │
+       │       │                 │          │
+       │  ┌────┴─────────────────┴─────┐    │
+       │  │       Worker Process       │    │
+       │  │  ┌───────────────────────┐ │    │
+       │  │  │   Scheduler Loop      │ │    │
+       │  │  │(heap or timing wheel) │ │    │
+       │  │  └──────────┬────────────┘ │    │
+       │  │             ▼              │    │
+       │  │  ┌───────────────────────┐ │    │
+       │  │  │   Worker Pool (×N)    │ │    │
+       │  │  │  Lock → Execute → Log │ │    │
+       │  │  └───────────────────────┘ │    │
+       │  │  ┌───────────────────────┐ │    │
+       │  │  │  Recovery: Retry/DLQ  │ │    │
+       │  │  │  Cancellation Listener│ │    │
+       │  │  └───────────────────────┘ │    │
+       │  └────────────────────────────┘    │
+       └────────────────────────────────────┘
 ```
 
 **Key isolation properties:**
+
 - The API **never blocks on job execution**. It writes to the database and publishes events.
 - The worker **runs independently** via `uv run --package worker python -m worker`.
 - PostgreSQL is the single source of truth for all job state.
@@ -84,99 +80,101 @@ The system guarantees:
 ## 3. Monorepo Structure
 
 ```
+
 job-scheduler/
-├── backend/                          # uv workspace root
-│   ├── pyproject.toml               # Workspace definition, dev deps
-│   ├── alembic/                     # Database migrations
-│   │   ├── env.py
-│   │   └── versions/
-│   │       └── 3499ddaccae7_initial_migration.py
-│   └── packages/
-│       ├── shared/                  # Library — imported by api + worker
-│       │   └── src/shared/
-│       │       ├── config.py        # pydantic-settings (env vars)
-│       │       ├── database.py      # AsyncEngine singleton
-│       │       ├── redis.py         # Redis connection + pubsub
-│       │       ├── dag.py           # Cycle detection (DFS)
-│       │       ├── logging.py       # Structured JSON logger
-│       │       ├── models/          # SQLAlchemy ORM models
-│       │       │   ├── job.py
-│       │       │   ├── job_dependency.py
-│       │       │   └── execution_log.py
-│       │       └── schemas/         # Pydantic v2 request/response
-│       │           ├── job.py
-│       │           ├── execution_log.py
-│       │           ├── websocket.py
-│       │           └── worker.py
-│       ├── api/                     # FastAPI HTTP + WebSocket server
-│       │   └── src/api/
-│       │       ├── main.py          # App factory, lifespan, CORS
-│       │       ├── deps.py          # FastAPI dependency injection
-│       │       ├── routers/
-│       │       │   ├── health.py
-│       │       │   ├── jobs.py      # CRUD, cancel, dashboard stats
-│       │       │   ├── dlq.py       # Dead-letter queue endpoints
-│       │       │   └── workers.py   # Fleet status, scheduler info
-│       │       ├── services/
-│       │       │   ├── job_service.py
-│       │       │   └── event_publisher.py
-│       │       └── websocket/
-│       │           └── manager.py   # ConnectionManager + Redis bridge
-│       └── worker/                  # Scheduler + executor + handlers
-│           └── src/worker/
-│               ├── main.py          # Entry point, orchestration
-│               ├── scheduler/
-│               │   ├── heap_scheduler.py   # Min-heap with V-rank
-│               │   ├── timing_wheel.py     # Hashed timing wheel
-│               │   ├── dag_resolver.py     # Ready-job query
-│               │   └── benchmark.py        # Heap vs. wheel benchmark
-│               ├── executor/
-│               │   ├── worker_pool.py      # Async worker pool
-│               │   └── lock_manager.py     # Redis distributed locks
-│               ├── handlers/
-│               │   ├── base.py
-│               │   ├── email_handler.py    # MIME construction + SMTP sim
-│               │   ├── webhook_handler.py  # HTTP POST simulation
-│               │   ├── log_handler.py      # Structured log processing
-│               │   └── registry.py
-│               └── recovery/
-│                   ├── retry.py            # Backoff with jitter
-│                   ├── dlq.py              # DLQ threshold + email alert
-│                   └── cancellation.py     # Redis Pub/Sub cancellation
-├── frontend/                         # React dashboard (Vite + daisyUI)
-│   ├── package.json
-│   ├── vite.config.ts               # Dev proxy → :8000
-│   └── src/
-│       ├── sdk/                     # hey-api generated client (gitignored)
-│       ├── app/
-│       │   ├── App.tsx
-│       │   ├── lib/
-│       │   │   ├── api.ts           # hey-api client config
-│       │   │   ├── services.ts      # Typed API wrappers
-│       │   │   ├── websocket.tsx     # WebSocket provider + reconnection
-│       │   │   ├── hooks.ts         # Data-fetching + mutation hooks
-│       │   │   ├── types.ts         # UI types, label maps, constants
-│       │   │   └── format.ts        # Display formatters
-│       │   ├── pages/
-│       │   │   ├── Layout.tsx
-│       │   │   └── Dashboard.tsx
-│       │   └── components/
-│       │       ├── Sidebar.tsx
-│       │       ├── WorkerFleet.tsx
-│       │       ├── StatsGrid.tsx
-│       │       ├── JobsTable.tsx
-│       │       ├── CreateJobModal.tsx
-│       │       ├── DlqView.tsx
-│       │       └── LogsPanel.tsx
-│       └── styles/
-│           └── index.css            # Tailwind CSS v4 + daisyUI 5
+├── backend/ # uv workspace root
+│ ├── pyproject.toml # Workspace definition, dev deps
+│ ├── alembic/ # Database migrations
+│ │ ├── env.py
+│ │ └── versions/
+│ │ └── 3499ddaccae7_initial_migration.py
+│ └── packages/
+│ ├── shared/ # Library — imported by api + worker
+│ │ └── src/shared/
+│ │ ├── config.py # pydantic-settings (env vars)
+│ │ ├── database.py # AsyncEngine singleton
+│ │ ├── redis.py # Redis connection + pubsub
+│ │ ├── dag.py # Cycle detection (DFS)
+│ │ ├── logging.py # Structured JSON logger
+│ │ ├── models/ # SQLAlchemy ORM models
+│ │ │ ├── job.py
+│ │ │ ├── job_dependency.py
+│ │ │ └── execution_log.py
+│ │ └── schemas/ # Pydantic v2 request/response
+│ │ ├── job.py
+│ │ ├── execution_log.py
+│ │ ├── websocket.py
+│ │ └── worker.py
+│ ├── api/ # FastAPI HTTP + WebSocket server
+│ │ └── src/api/
+│ │ ├── main.py # App factory, lifespan, CORS
+│ │ ├── deps.py # FastAPI dependency injection
+│ │ ├── routers/
+│ │ │ ├── health.py
+│ │ │ ├── jobs.py # CRUD, cancel, dashboard stats
+│ │ │ ├── dlq.py # Dead-letter queue endpoints
+│ │ │ └── workers.py # Fleet status, scheduler info
+│ │ ├── services/
+│ │ │ ├── job_service.py
+│ │ │ └── event_publisher.py
+│ │ └── websocket/
+│ │ └── manager.py # ConnectionManager + Redis bridge
+│ └── worker/ # Scheduler + executor + handlers
+│ └── src/worker/
+│ ├── main.py # Entry point, orchestration
+│ ├── scheduler/
+│ │ ├── heap_scheduler.py # Min-heap with V-rank
+│ │ ├── timing_wheel.py # Hashed timing wheel
+│ │ ├── dag_resolver.py # Ready-job query
+│ │ └── benchmark.py # Heap vs. wheel benchmark
+│ ├── executor/
+│ │ ├── worker_pool.py # Async worker pool
+│ │ └── lock_manager.py # Redis distributed locks
+│ ├── handlers/
+│ │ ├── base.py
+│ │ ├── email_handler.py # MIME construction + SMTP sim
+│ │ ├── webhook_handler.py # HTTP POST simulation
+│ │ ├── log_handler.py # Structured log processing
+│ │ └── registry.py
+│ └── recovery/
+│ ├── retry.py # Backoff with jitter
+│ ├── dlq.py # DLQ threshold + email alert
+│ └── cancellation.py # Redis Pub/Sub cancellation
+├── frontend/ # React dashboard (Vite + daisyUI)
+│ ├── package.json
+│ ├── vite.config.ts # Dev proxy → :8000
+│ └── src/
+│ ├── sdk/ # hey-api generated client (gitignored)
+│ ├── app/
+│ │ ├── App.tsx
+│ │ ├── lib/
+│ │ │ ├── api.ts # hey-api client config
+│ │ │ ├── services.ts # Typed API wrappers
+│ │ │ ├── websocket.tsx # WebSocket provider + reconnection
+│ │ │ ├── hooks.ts # Data-fetching + mutation hooks
+│ │ │ ├── types.ts # UI types, label maps, constants
+│ │ │ └── format.ts # Display formatters
+│ │ ├── pages/
+│ │ │ ├── Layout.tsx
+│ │ │ └── Dashboard.tsx
+│ │ └── components/
+│ │ ├── Sidebar.tsx
+│ │ ├── WorkerFleet.tsx
+│ │ ├── StatsGrid.tsx
+│ │ ├── JobsTable.tsx
+│ │ ├── CreateJobModal.tsx
+│ │ ├── DlqView.tsx
+│ │ └── LogsPanel.tsx
+│ └── styles/
+│ └── index.css # Tailwind CSS v4 + daisyUI 5
 └── deploy/
-    ├── nginx.conf                   # Nginx site config (sites-enabled/)
-    ├── start_api.sh                 # Migrations + uvicorn
-    ├── start_worker.sh              # Worker entry
-    └── systemd/
-        ├── api.service
-        └── worker.service
+├── nginx.conf # Nginx site config (sites-enabled/)
+├── start_api.sh # Migrations + uvicorn
+├── start_worker.sh # Worker entry
+└── systemd/
+├── api.service
+└── worker.service
+
 ```
 
 ---
@@ -188,58 +186,72 @@ job-scheduler/
 Three tables form the persistent state:
 
 ```
-┌─────────────────────────────────────────────┐
-│ jobs                                        │
-├─────────────────────────────────────────────┤
-│ id           UUID (PK)                      │
-│ type         VARCHAR(50)                    │
-│ priority     SMALLINT (1=High, 2=Med, 3=Low)│
-│ status       VARCHAR(20)                    │
-│              (pending|processing|completed   │
-│               |failed|cancelled)             │
-│ payload      JSONB                          │
-│ error_details JSONB (nullable)               │
-│ retry_count  INTEGER                        │
-│ max_retries  INTEGER                        │
-│ scheduled_at TIMESTAMPTZ                    │
-│ interval     VARCHAR(30) (nullable)          │
-│ created_at   TIMESTAMPTZ                    │
-│ updated_at   TIMESTAMPTZ                    │
-└─────────────────────────────────────────────┘
-        │                    │
-        │ (FK)               │ (FK)
-        ▼                    ▼
-┌───────────────────┐  ┌──────────────────────┐
-│ job_dependencies   │  │ execution_logs        │
-├───────────────────┤  ├──────────────────────┤
-│ parent_job_id UUID │  │ id         INTEGER   │
-│ child_job_id  UUID │  │ job_id     UUID (FK) │
-│ (composite PK)     │  │ event_type VARCHAR   │
-└───────────────────┘  │ log_data   JSONB     │
-                       │ created_at TIMESTAMPTZ│
-                       └──────────────────────┘
+
+┌──────────────────────────────────────────┐
+│ jobs                                     │
+├──────────────────────────────────────────┤
+│ id UUID (PK)                             │
+│ type VARCHAR(50)                         │
+│ priority SMALLINT (1=High, 2=Med, 3=Low) │
+│ status VARCHAR(20)                       │
+│ (pending|processing|completed            │
+│ |failed|cancelled)                       │
+│ payload JSONB                            │
+│ error_details JSONB (nullable)           │
+│ retry_count INTEGER                      │
+│ max_retries INTEGER                      │
+│ scheduled_at TIMESTAMPTZ                 │
+│ interval VARCHAR(30) (nullable)          │
+│ created_at TIMESTAMPTZ                   │
+│ updated_at TIMESTAMPTZ                   │
+└──────────────────────────────────────────┘
+│ │
+│ (FK) │ (FK)
+▼ ▼
+┌────────────────────┐ ┌────────────────────────┐
+│ job_dependencies   │ │ execution_logs         │
+├────────────────────┤ ├────────────────────────┤
+│ parent_job_id UUID │ │ id INTEGER             │
+│ child_job_id UUID  │ │ job_id UUID (FK)       │
+│ (composite PK)     │ │ event_type VARCHAR     │
+└────────────────────┘ │ log_data JSONB         │
+                       │ created_at TIMESTAMPTZ │
+                       └────────────────────────┘
+
 ```
 
 ### 4.2 Job Lifecycle State Machine
 
 ```
- create
-   │
-   ▼
- pending ──────────────────────────► cancelled
-   │                                    ▲
-   │ (scheduled_at ≤ now                │
-   │  & deps completed)                 │
-   ▼                                    │
- processing ────(cancellation signal)───┘
-   │
-   ├── success ──► completed ──(recurring)──► pending (clone)
-   │
-   └── failure ──► retry (backoff, retry_count++)
-        │              │
-        │              └──(retries < max)──► pending
-        │
-        └──(retries ≥ max)──► failed (DLQ) ──(manual retry)──► pending
+     ┌──────────┐
+     │  create  │
+     └────┬─────┘
+          ▼
+     ┌─────────┐         ┌───────────┐
+     │ pending ├────────►│ cancelled │
+     └────┬────┘         └───────────┘
+          │                    ▲
+          │ (scheduled ≤ now   │
+          │  & deps done)      │ (signal)
+          ▼                    │
+     ┌────────────┐  ┌─────────┴──┐
+     │ processing ├──┤ cancel sig │
+     └──┬──────┬──┘  └────────────┘
+        │      │
+     success  failure
+        │      │
+        ▼      ▼
+   ┌─────────┐   ┌───────┐
+   │completed│   │ retry │──(retries < max)──► pending
+   └────┬────┘   └───┬───┘
+        │            │
+   (recurring)  (retries ≥ max)
+        │            │
+        ▼            ▼
+     pending    ┌────────┐
+     (clone)    │ failed │──(manual retry)──► pending
+                │ (DLQ)  │
+                └────────┘
 ```
 
 All transitions are recorded as structured `ExecutionLog` rows and broadcast
@@ -266,6 +278,7 @@ The aging is baked into the immutable rank at entry time, so a job that has been
 eligible for a long time naturally overtakes newer high-priority jobs.
 
 **Key design decisions:**
+
 - Only **ready-to-run** jobs enter the heap (scheduled_at ≤ now, all DAG
   dependencies completed). Future jobs and blocked jobs stay in PostgreSQL.
 - Recurring jobs automatically clone themselves (new `pending` row with
@@ -278,6 +291,7 @@ eligible for a long time naturally overtakes newer high-priority jobs.
 **Data structure:** Circular array of 60 slots, 1s tick duration.
 
 **Algorithm:**
+
 - `add_job`: O(1) — computes `target_slot = (current_slot + total_ticks) % num_slots`
 - `tick`: O(k) where k = jobs in the current slot; advances the wheel pointer
 - Jobs with delays exceeding one full wheel rotation are tracked with
@@ -285,25 +299,25 @@ eligible for a long time naturally overtakes newer high-priority jobs.
 
 **Tradeoffs vs. Heap:**
 
-| Property | Heap | Timing Wheel |
-|---|---|---|
-| Insert | O(log n) | O(1) |
-| Extract-min | O(log n) | O(k) per tick |
-| Priority ordering | Strict (3-tier sort) | FIFO within a slot |
-| Aging | Virtual rank formula | None |
-| Best for | Mixed-priority workloads | High-volume timed events |
-| Configuration toggle | `SCHEDULER_ENGINE=heap` | `SCHEDULER_ENGINE=timing_wheel` |
+| Property             | Heap                     | Timing Wheel                    |
+| -------------------- | ------------------------ | ------------------------------- |
+| Insert               | O(log n)                 | O(1)                            |
+| Extract-min          | O(log n)                 | O(k) per tick                   |
+| Priority ordering    | Strict (3-tier sort)     | FIFO within a slot              |
+| Aging                | Virtual rank formula     | None                            |
+| Best for             | Mixed-priority workloads | High-volume timed events        |
+| Configuration toggle | `SCHEDULER_ENGINE=heap`  | `SCHEDULER_ENGINE=timing_wheel` |
 
 ### 5.3 Benchmark Results
 
 Run with: `uv run --package worker python -m worker.scheduler.benchmark`
 
-| Jobs | Heap Insert (p50) | Wheel Insert (p50) | Heap Extract (p50) | Wheel Extract (p50) |
-|------|-------------------|-------------------|---------------------|----------------------|
-| 100 | 1.20µs | 1.20µs | 1.70µs | 1.35µs |
-| 1,000 | 1.20µs | 1.20µs | 2.10µs | 2.50µs |
-| 10,000 | 1.20µs | 1.20µs | 2.90µs | 15.90µs |
-| 100,000 | 1.30µs | 1.30µs | 5.60µs | 257.40µs |
+| Jobs    | Heap Insert (p50) | Wheel Insert (p50) | Heap Extract (p50) | Wheel Extract (p50) |
+| ------- | ----------------- | ------------------ | ------------------ | ------------------- |
+| 100     | 1.20µs            | 1.20µs             | 1.70µs             | 1.35µs              |
+| 1,000   | 1.20µs            | 1.20µs             | 2.10µs             | 2.50µs              |
+| 10,000  | 1.20µs            | 1.20µs             | 2.90µs             | 15.90µs             |
+| 100,000 | 1.30µs            | 1.30µs             | 5.60µs             | 257.40µs            |
 
 **Observation:** The heap wins on extract at scale because O(log n) degrades
 gracefully while the wheel's per-tick O(k) depends on slot density. At 10K+
@@ -330,11 +344,13 @@ subquery that checks whether every parent of a `pending` job has reached
 **Example 3-step workflow:**
 
 ```
+
 Generate Report (log_processing, priority 1)
-       ↓
-Upload File    (webhook, priority 1, depends_on=[report.id])
-       ↓
-Send Email     (send_email, priority 1, depends_on=[upload.id])
+↓
+Upload File (webhook, priority 1, depends_on=[report.id])
+↓
+Send Email (send_email, priority 1, depends_on=[upload.id])
+
 ```
 
 ---
@@ -346,7 +362,9 @@ Send Email     (send_email, priority 1, depends_on=[upload.id])
 Every worker acquires an exclusive lock before processing a job:
 
 ```
+
 SET lock:job:<uuid> <worker_id> NX PX 30000
+
 ```
 
 - **NX** (Not eXists) — only succeeds if no lock is held
@@ -375,10 +393,10 @@ process-local safety nets; the Redis lock is the authoritative distributed guard
   shared failure causes (e.g., external API outage)
 
 | Attempt | Approximate delay |
-|---------|------------------|
-| 1 | ~1s |
-| 2 | ~5s |
-| 3 | ~25s |
+| ------- | ----------------- |
+| 1       | ~1s               |
+| 2       | ~5s               |
+| 3       | ~25s              |
 
 A failed job transitions back to `pending` with a `next_retry_at` timestamp.
 The scheduler skips jobs whose retry window has not yet elapsed.
@@ -425,20 +443,22 @@ needed.
 ### 10.1 Event Pipeline
 
 ```
+
 Job state change
-       │
-       ▼
-  publish_event()
-       │
-       ├─► PostgreSQL (execution_logs table)
-       │
-       └─► Redis Pub/Sub (channel: jobs:events)
-              │
-              ▼
-       ConnectionManager._redis_listener()
-              │
-              ▼
-       Fan-out to all connected WebSocket clients
+│
+▼
+publish_event()
+│
+├─► PostgreSQL (execution_logs table)
+│
+└─► Redis Pub/Sub (channel: jobs:events)
+│
+▼
+ConnectionManager.\_redis_listener()
+│
+▼
+Fan-out to all connected WebSocket clients
+
 ```
 
 ### 10.2 WebSocket Message Format
@@ -447,7 +467,7 @@ Job state change
 {
   "event": "JOB_STARTED",
   "job_id": "41bd37bf-cdc3-43e5-8965-b06fbc46afaf",
-  "data": {"worker_node": "worker_0_9a964172"},
+  "data": { "worker_node": "worker_0_9a964172" },
   "timestamp": "2026-06-12T15:47:00Z"
 }
 ```
@@ -458,6 +478,7 @@ Job state change
 ### 10.3 Frontend WebSocket Resilience
 
 The React `WebSocketProvider` implements exponential backoff reconnection:
+
 - Initial delay: 1s
 - Max delay: 30s
 - Formula: `min(1000 × 2^(attempt), 30000)` ms
@@ -493,16 +514,16 @@ have a 5-second TTL — workers that stop publishing disappear from the fleet vi
 
 ### 12.1 Stack
 
-| Concern | Technology |
-|---|---|
-| Framework | React 18 |
-| Language | TypeScript 5 (strict mode) |
-| Build | Vite 6 |
-| Styling | daisyUI 5 (Tailwind CSS 4), `dim` theme |
+| Concern    | Technology                                      |
+| ---------- | ----------------------------------------------- |
+| Framework  | React 18                                        |
+| Language   | TypeScript 5 (strict mode)                      |
+| Build      | Vite 6                                          |
+| Styling    | daisyUI 5 (Tailwind CSS 4), `dim` theme         |
 | API Client | hey-api (generated from FastAPI OpenAPI schema) |
-| Real-time | WebSocket (exponential backoff reconnect) |
-| Routing | React Router v7 |
-| Toasts | sonner |
+| Real-time  | WebSocket (exponential backoff reconnect)       |
+| Routing    | React Router v7                                 |
+| Toasts     | sonner                                          |
 
 ### 12.2 Type-Safe API Layer
 
@@ -558,12 +579,12 @@ tier — matching the backend's `alpha = 1.0 / 3600.0`.
 
 ### 13.2 Nginx Routing
 
-| Path | Destination |
-|---|---|
-| `/api/*` | `http://127.0.0.1:8000` (uvicorn) |
-| `/ws/*` | `http://127.0.0.1:8000` (WebSocket upgrade) |
-| `/docs`, `/redoc`, `/openapi.json` | `http://127.0.0.1:8000` |
-| `/` + static assets | `/var/www/scheduler-ui` (Vite build output) |
+| Path                               | Destination                                 |
+| ---------------------------------- | ------------------------------------------- |
+| `/api/*`                           | `http://127.0.0.1:8000` (uvicorn)           |
+| `/ws/*`                            | `http://127.0.0.1:8000` (WebSocket upgrade) |
+| `/docs`, `/redoc`, `/openapi.json` | `http://127.0.0.1:8000`                     |
+| `/` + static assets                | `/var/www/scheduler-ui` (Vite build output) |
 
 All HTTP/80 traffic is redirected to HTTPS/443. TLS is provisioned via
 Let's Encrypt (certbot).
@@ -571,6 +592,7 @@ Let's Encrypt (certbot).
 ### 13.3 systemd Unit Design
 
 Both `api.service` and `worker.service`:
+
 - Run as user `ubuntu`, group `ubuntu`
 - Read environment from `/opt/dilamme-scheduler/backend/.env`
 - Include `/home/ubuntu/.local/bin` on PATH (for `uv`)
@@ -595,32 +617,32 @@ start_api.sh:                  start_worker.sh:
 
 All knobs are environment variables, set in `backend/.env`:
 
-| Variable | Default | Description |
-|---|---|---|
-| `DATABASE_URL` | (required) | PostgreSQL async connection string |
-| `REDIS_URL` | `redis://localhost:6379/0` | Redis connection string |
-| `WORKER_CONCURRENCY` | 4 | Number of async worker tasks |
-| `SCHEDULER_ENGINE` | `heap` | `heap` or `timing_wheel` |
-| `DLQ_ALERT_THRESHOLD` | 10 | Jobs in DLQ before alert fires |
-| `DLQ_ALERT_EMAIL` | `admin@dilamme.com` | Alert recipient address |
-| `SMTP_HOST` | `localhost` | SMTP server for DLQ alerts |
-| `SMTP_PORT` | 1025 | SMTP port (Mailpit dev default) |
-| `LOG_LEVEL` | `INFO` | Structured log verbosity |
-| `API_HOST` | `0.0.0.0` | Uvicorn bind address |
-| `API_PORT` | 8000 | Uvicorn listen port |
-| `API_WORKERS` | 2 | Uvicorn worker processes |
+| Variable              | Default                    | Description                        |
+| --------------------- | -------------------------- | ---------------------------------- |
+| `DATABASE_URL`        | (required)                 | PostgreSQL async connection string |
+| `REDIS_URL`           | `redis://localhost:6379/0` | Redis connection string            |
+| `WORKER_CONCURRENCY`  | 4                          | Number of async worker tasks       |
+| `SCHEDULER_ENGINE`    | `heap`                     | `heap` or `timing_wheel`           |
+| `DLQ_ALERT_THRESHOLD` | 10                         | Jobs in DLQ before alert fires     |
+| `DLQ_ALERT_EMAIL`     | `admin@dilamme.com`        | Alert recipient address            |
+| `SMTP_HOST`           | `localhost`                | SMTP server for DLQ alerts         |
+| `SMTP_PORT`           | 1025                       | SMTP port (Mailpit dev default)    |
+| `LOG_LEVEL`           | `INFO`                     | Structured log verbosity           |
+| `API_HOST`            | `0.0.0.0`                  | Uvicorn bind address               |
+| `API_PORT`            | 8000                       | Uvicorn listen port                |
+| `API_WORKERS`         | 2                          | Uvicorn worker processes           |
 
 ---
 
 ## 15. Key Design Decisions & Rationale
 
-| Decision | Rationale |
-|---|---|
-| PostgreSQL as source of truth | ACID guarantees; crash-resilient; no data loss on worker restart |
-| Redis as volatile layer only | Best-effort pub/sub + locks; no durable state stored in Redis |
-| Immutable virtual rank | No in-place heap mutation needed; O(log n) reheapify avoided |
-| Cooperative cancellation | Python's asyncio cancellation is cooperative by nature; preemptive would require OS signals |
-| `ProtectSystem=strict` in systemd | Defense-in-depth: even if the service is compromised, system binaries are read-only |
-| hey-api SDK gitignored | Derived artifact; regenerated on every build; pinning it risks schema drift |
-| daisyUI over shadcn/MUI | No JS runtime overhead; pure CSS classes; `dim` theme fits ops dashboard aesthetic |
-| 1-hour aging window | Tradeoff: long enough to prevent thrashing, short enough that no job waits forever; empirically aligns with on-call SLO windows |
+| Decision                          | Rationale                                                                                                                       |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| PostgreSQL as source of truth     | ACID guarantees; crash-resilient; no data loss on worker restart                                                                |
+| Redis as volatile layer only      | Best-effort pub/sub + locks; no durable state stored in Redis                                                                   |
+| Immutable virtual rank            | No in-place heap mutation needed; O(log n) reheapify avoided                                                                    |
+| Cooperative cancellation          | Python's asyncio cancellation is cooperative by nature; preemptive would require OS signals                                     |
+| `ProtectSystem=strict` in systemd | Defense-in-depth: even if the service is compromised, system binaries are read-only                                             |
+| hey-api SDK gitignored            | Derived artifact; regenerated on every build; pinning it risks schema drift                                                     |
+| daisyUI over shadcn/MUI           | No JS runtime overhead; pure CSS classes; `dim` theme fits ops dashboard aesthetic                                              |
+| 1-hour aging window               | Tradeoff: long enough to prevent thrashing, short enough that no job waits forever; empirically aligns with on-call SLO windows |
