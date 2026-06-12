@@ -1,5 +1,5 @@
 import { RefreshCw } from 'lucide-react';
-import { useJobs, useStats } from '../lib/hooks';
+import { useJobs, useStats, useWorkerFleet, useSchedulerInfo } from '../lib/hooks';
 import { StatsGrid } from '../components/StatsGrid';
 import { JobsTable } from '../components/JobsTable';
 import { LogsPanel } from '../components/LogsPanel';
@@ -9,6 +9,8 @@ import { CreateJobModal } from '../components/CreateJobModal';
 export function Dashboard() {
   const { jobs, loading, total, page, limit, refresh, setPage } = useJobs();
   const { stats } = useStats();
+  const { fleet } = useWorkerFleet();
+  const schedulerInfo = useSchedulerInfo();
 
   return (
     <div className="flex flex-col gap-5">
@@ -27,7 +29,7 @@ export function Dashboard() {
         </div>
       </header>
 
-      <WorkerFleet />
+      <WorkerFleet fleet={fleet} />
       <StatsGrid stats={stats} />
 
       <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_340px] gap-5 items-start">

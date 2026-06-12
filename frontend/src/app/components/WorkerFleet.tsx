@@ -1,22 +1,20 @@
 import { Cpu } from 'lucide-react';
-import { useJobs } from '../lib/hooks';
+import type { WorkerFleetStatus, WorkerState } from '../lib/services';
 import { JOB_TYPE_LABEL } from '../lib/types';
 import { shortId } from '../lib/format';
-import type { JobResponse } from '../lib/services';
-
-const WORKER_COUNT = 3;
 
 /**
- * Shows each logical worker bay and what it's currently executing.
- * Workers are simulated — real workers run independently on the backend.
+ * Shows each worker bay from real backend heartbeats.
+ * Falls back to a skeleton state when the worker process is down.
  */
-export function WorkerFleet() {
-  const { jobs } = useJobs();
-  const active = jobs.filter((j) => j.status === 'processing');
-  const bays: (JobResponse | null)[] = Array.from(
-    { length: WORKER_COUNT },
-    (_, i) => active[i] ?? null,
-  );
+export function WorkerFleet({ fleet }: { fleet: WorkerFleetStatus }) {
+  const { workers = [], total_workers, busy_workers } = fleet;
+
+  // If no heartbeats received yet, show skeleton based on concurrency hint
+  const displayWorkers: (WorkerState | null)[] =
+    workers.length > 0
+      ? workers
+      : Array.from({ length: total_workers || 1 }, () => null);
 
   return (
     <div className="rounded-box border border-base-300 bg-base-200">
@@ -26,36 +24,56 @@ export function WorkerFleet() {
           Worker Fleet
         </span>
         <span className="text-xs font-mono text-base-content/40 ml-auto">
-          {active.length}/{WORKER_COUNT} busy
+          {busy_workers}/{displayWorkers.length} busy
         </span>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-px bg-base-300 rounded-b-box overflow-hidden">
-        {bays.map((job, i) => (
-          <div key={i} className="bg-base-200 px-4 py-3">
-            <div className="flex items-center gap-2 mb-1.5">
-              <span className="font-mono text-xs text-base-content/40">worker-{i + 1}</span>
-              <span
-                className={`ml-auto inline-flex items-center gap-1 text-xs ${job ? 'text-warning' : 'text-base-content/40'
-                  }`}
-              >
-                <span
-                  className={`size-1.5 rounded-full ${job ? 'bg-warning animate-pulse' : 'bg-base-content/30'
-                    }`}
-                />
-                {job ? 'running' : 'idle'}
-              </span>
-            </div>
-            {job ? (
-              <div>
-                <div className="text-sm font-medium truncate">{JOB_TYPE_LABEL[job.type] ?? job.type}</div>
-                <div className="font-mono text-xs text-base-content/50">{shortId(job.id)}</div>
-              </div>
-            ) : (
-              <div className="text-sm text-base-content/30">awaiting work</div>
-            )}
-          </div>
+        {displayWorkers.map((worker, i) => (
+          <Bay key={worker?.worker_id ?? `pending-${i}`} index={i} worker={worker} />
         ))}
       </div>
+    </div>
+  );
+}
+
+function Bay({ index, worker }: { index: number; worker: WorkerState | null }) {
+  const running = worker?.status === 'running';
+
+  return (
+    <div className="bg-base-200 px-4 py-3">
+      <div className="flex items-center gap-2 mb-1.5">
+        <span className="font-mono text-xs text-base-content/40">
+          {worker?.worker_id ?? `worker-${index + 1}`}
+        </span>
+        <span
+          className={`ml-auto inline-flex items-center gap-1 text-xs ${
+            running ? 'text-warning' : 'text-base-content/40'
+          }`}
+        >
+          <span
+            className={`size-1.5 rounded-full ${
+              running ? 'bg-warning animate-pulse' : 'bg-base-content/30'
+            }`}
+          />
+          {running ? 'running' : worker ? 'idle' : 'offline'}
+        </span>
+      </div>
+      {running && worker ? (
+        <div>
+          <div className="text-sm font-medium truncate">
+            {JOB_TYPE_LABEL[worker.job_type ?? ''] ?? worker.job_type}
+          </div>
+          {worker.job_id && (
+            <div className="font-mono text-xs text-base-content/50">
+              {shortId(worker.job_id)}
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="text-sm text-base-content/30">
+          {worker ? 'awaiting work' : 'no heartbeat'}
+        </div>
+      )}
     </div>
   );
 }

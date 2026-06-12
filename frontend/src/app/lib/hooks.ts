@@ -7,8 +7,10 @@ import {
   createJob,
   cancelJob,
   retryDlqJob,
+  fetchWorkerFleet,
+  fetchSchedulerInfo,
 } from './services';
-import type { JobResponse, JobCreate, DashboardStats } from './services';
+import type { JobResponse, JobCreate, DashboardStats, WorkerFleetStatus, WorkerState, SchedulerInfo } from './services';
 
 /* ------------------------------------------------------------------ */
 /* Jobs hook — polled list with WS-driven splicing                    */
@@ -122,4 +124,45 @@ export function useCancelJob() {
 
 export function useRetryDlqJob() {
   return async (jobId: string) => retryDlqJob(jobId);
+}
+
+/* ------------------------------------------------------------------ */
+/* Worker fleet hook                                                   */
+/* ------------------------------------------------------------------ */
+
+export function useWorkerFleet() {
+  const [fleet, setFleet] = useState<WorkerFleetStatus>({ workers: [], total_workers: 0, busy_workers: 0 });
+  const { lastMessage } = useWebSocket();
+
+  const refresh = useCallback(async () => {
+    try {
+      const res = await fetchWorkerFleet();
+      if (res.data) setFleet(res.data);
+    } catch { /* worker process may be down */ }
+  }, []);
+
+  useEffect(() => { refresh(); }, [refresh]);
+
+  // Refresh on any WS event (job state changes may update worker assignments)
+  useEffect(() => {
+    if (lastMessage) refresh();
+  }, [lastMessage, refresh]);
+
+  return { fleet, refresh };
+}
+
+/* ------------------------------------------------------------------ */
+/* Scheduler info hook                                                  */
+/* ------------------------------------------------------------------ */
+
+export function useSchedulerInfo() {
+  const [info, setInfo] = useState<SchedulerInfo | null>(null);
+
+  useEffect(() => {
+    fetchSchedulerInfo().then((res) => {
+      if (res.data) setInfo(res.data);
+    });
+  }, []);
+
+  return info;
 }

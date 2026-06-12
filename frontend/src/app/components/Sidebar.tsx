@@ -1,11 +1,12 @@
 import { NavLink } from 'react-router';
-import { LayoutDashboard, Skull, Boxes } from 'lucide-react';
-import { useJobs } from '../lib/hooks';
+import { LayoutDashboard, Skull, Boxes, Cpu } from 'lucide-react';
+import { useJobs, useSchedulerInfo } from '../lib/hooks';
 import { useWebSocket } from '../lib/websocket';
 
 export function Sidebar() {
   const { jobs } = useJobs();
   const { status } = useWebSocket();
+  const schedulerInfo = useSchedulerInfo();
   const dlqCount = jobs.filter((j) => j.status === 'failed').length;
   const activeCount = jobs.filter((j) => j.status === 'processing').length;
 
@@ -39,10 +40,22 @@ export function Sidebar() {
         )}
       </div>
 
+      {schedulerInfo && (
+        <div className="mx-5 mb-2 rounded-lg bg-base-300/40 px-3 py-2.5 flex items-center justify-between">
+          <span className="text-xs text-base-content/60 flex items-center gap-1">
+            <Cpu size={10} />
+            Scheduler
+          </span>
+          <span className="badge badge-sm font-mono">
+            {schedulerInfo.engine === 'heap' ? 'Heap' : 'Timing Wheel'}
+          </span>
+        </div>
+      )}
+
       <nav className="px-3 mt-2 flex-1">
         <ul className="menu w-full gap-1 p-0">
           <li>
-            <NavLink to="/" end className={({ isActive }) => (isActive ? 'active' : '')}>
+            <NavLink to="/" end className={({ isActive }) => (isActive ? 'menu-active' : '')}>
               <LayoutDashboard size={18} />
               <span>Dashboard</span>
               {activeCount > 0 && (
@@ -51,7 +64,7 @@ export function Sidebar() {
             </NavLink>
           </li>
           <li>
-            <NavLink to="/dlq" className={({ isActive }) => (isActive ? 'active' : '')}>
+            <NavLink to="/dlq" className={({ isActive }) => (isActive ? 'menu-active' : '')}>
               <Skull size={18} />
               <span>Dead-Letter Queue</span>
               {dlqCount > 0 && (

@@ -43,7 +43,7 @@ export type LogLevel = 'info' | 'warn' | 'error' | 'success';
 /* ------------------------------------------------------------------ */
 
 export const JOB_TYPE_LABEL: Record<string, string> = {
-  send_email: 'Email Simulation',
+  send_email: 'Email Delivery',
   webhook_delivery: 'Webhook Delivery',
   log_processing: 'Log Processing',
 } as const;
@@ -72,8 +72,14 @@ export const STATUS_LABEL: Record<string, string> = {
 /* Starvation / aging constants                                       */
 /* ------------------------------------------------------------------ */
 
-/** How long (ms) a job waits before its effective priority improves by 1. */
-export const STARVATION_STEP_MS = 15_000;
+/**
+ * Aging window: a job waiting 1 hour past its scheduled time gains
+ * a full priority tier improvement. Matches the backend heap formula:
+ *   V = base_priority + (1.0 / 3600.0) × scheduled_at_timestamp
+ *
+ * The timing wheel engine has no aging — only the heap uses this.
+ */
+export const AGING_WINDOW_MS = 3_600_000; // 1 hour
 
 /** Max retries before a job lands in the DLQ. */
 export const MAX_RETRIES = 3;

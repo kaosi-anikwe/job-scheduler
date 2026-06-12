@@ -146,7 +146,7 @@ function Row({
   completedIds: Set<string>;
   onCancel: (id: string) => Promise<unknown>;
 }) {
-  const eff = effectivePriority(job, now);
+  const eff = effectivePriority(job);
   const aged = eff < job.priority;
   // Check if any dependency is not yet completed
   const dependencyIds: string[] = []; // API doesn't expose dependsOn in response — handled server-side

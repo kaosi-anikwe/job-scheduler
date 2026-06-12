@@ -67,9 +67,16 @@ export function shortId(id: string): string {
 /* Effective priority (starvation aging)                               */
 /* ------------------------------------------------------------------ */
 
-export function effectivePriority(job: Job, now: number): number {
+/**
+ * Matches the backend heap scheduler formula:
+ * V = base_priority + (1.0 / 3600.0) × scheduled_at_timestamp
+ *
+ * A job waiting 1 hour past its scheduled time gains 1 priority tier.
+ * The timing wheel engine has no aging — only the heap does.
+ */
+export function effectivePriority(job: Job): number {
   const eligible = new Date(job.scheduled_at).getTime();
-  const waited = now - eligible;
-  const bonus = Math.floor(Math.max(0, waited) / 15_000);
-  return Math.max(1, job.priority - bonus);
+  const waited = Math.max(0, Date.now() - eligible);
+  const bonusTiers = Math.floor(waited / 3_600_000); // 1 hour per tier
+  return Math.max(1, job.priority - bonusTiers);
 }

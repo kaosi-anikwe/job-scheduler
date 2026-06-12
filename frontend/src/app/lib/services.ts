@@ -7,13 +7,11 @@ import {
   dashboardStats as dashboardStatsSdk,
   listDlqJobs as listDlqJobsSdk,
   retryDlqJob as retryDlqJobSdk,
+  getWorkerFleet as getWorkerFleetSdk,
+  getSchedulerInfo as getSchedulerInfoSdk,
 } from '../../sdk/sdk.gen';
 import type {
-  JobResponse,
   JobCreate,
-  DashboardStats,
-  JobListResponse,
-  ExecutionLogResponse,
 } from '../../sdk/types.gen';
 import { apiClient } from './api';
 
@@ -92,6 +90,22 @@ export function retryDlqJob(jobId: string) {
 }
 
 /* ------------------------------------------------------------------ */
+/* Worker Fleet                                                        */
+/* ------------------------------------------------------------------ */
+
+export function fetchWorkerFleet() {
+  return getWorkerFleetSdk({ client: apiClient });
+}
+
+/* ------------------------------------------------------------------ */
+/* Scheduler Info                                                       */
+/* ------------------------------------------------------------------ */
+
+export function fetchSchedulerInfo() {
+  return getSchedulerInfoSdk({ client: apiClient });
+}
+
+/* ------------------------------------------------------------------ */
 /* Re-exports for convenience                                          */
 /* ------------------------------------------------------------------ */
 
@@ -101,4 +115,7 @@ export type {
   DashboardStats,
   JobListResponse,
   ExecutionLogResponse,
+  WorkerState,
+  WorkerFleetStatus,
+  SchedulerInfo,
 } from '../../sdk/types.gen';

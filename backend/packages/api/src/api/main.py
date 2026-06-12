@@ -12,7 +12,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from api.routers import dlq, health, jobs
+from api.routers import dlq, health, jobs, workers
 from api.websocket.manager import manager
 from shared.config import get_settings
 from shared.database import dispose_engine, get_engine
@@ -67,6 +67,7 @@ def create_app() -> FastAPI:
     app.include_router(health.router, prefix="/api/v1", tags=["Health"])
     app.include_router(jobs.router, prefix="/api/v1", tags=["Jobs"])
     app.include_router(dlq.router, prefix="/api/v1", tags=["Dead-Letter Queue"])
+    app.include_router(workers.router, prefix="/api/v1", tags=["Workers"])
 
     # -- WebSocket --
     from api.websocket.manager import websocket_endpoint

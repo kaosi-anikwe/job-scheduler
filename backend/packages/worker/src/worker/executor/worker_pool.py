@@ -8,6 +8,10 @@ Each worker task loops:
 5. On success: mark completed, handle recurring re-scheduling
 6. On failure: retry with backoff or move to DLQ
 7. Release the lock
+
+Heartbeats: each worker publishes its current state to Redis
+``worker:heartbeat:{worker_id}`` every 2 seconds, so the API can surface
+a live fleet view.
 """
 
 from __future__ import annotations
@@ -45,6 +49,8 @@ INTERVAL_MAP = {
     "every_1_hour": timedelta(hours=1),
 }
 
+HEARTBEAT_INTERVAL = 2.0  # seconds between heartbeat publishes
+
 
 class WorkerPool:
     """Manages a pool of concurrent async worker tasks."""
@@ -64,6 +70,8 @@ class WorkerPool:
         # Track in-flight jobs for cooperative cancellation
         self._inflight: dict[str, asyncio.Task[Any]] = {}
         self._inflight_lock = asyncio.Lock()
+        # Per-worker state for heartbeat publishing
+        self._worker_states: dict[str, dict[str, Any]] = {}
 
     async def start(self) -> None:
         """Start the worker pool."""
@@ -109,6 +117,17 @@ class WorkerPool:
         """Main loop for a single worker — pops jobs and processes them."""
         logger.info(f"Worker {worker_id} started", extra={"worker_node": worker_id})
 
+        # Initialise per-worker state
+        self._worker_states[worker_id] = {
+            "status": "idle",
+            "job_id": None,
+            "job_type": None,
+            "started_at": None,
+        }
+
+        # Start heartbeat publisher in background
+        heartbeat_task = asyncio.create_task(self._heartbeat_loop(worker_id))
+
         while not self._shutdown_event.is_set():
             try:
                 node = await self._scheduler.pop()
@@ -128,11 +147,43 @@ class WorkerPool:
                 )
                 await asyncio.sleep(1)
 
+        heartbeat_task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await heartbeat_task
+        self._worker_states.pop(worker_id, None)
         logger.info(f"Worker {worker_id} stopped", extra={"worker_node": worker_id})
+
+    async def _heartbeat_loop(self, worker_id: str) -> None:
+        """Publish this worker's state to Redis every HEARTBEAT_INTERVAL."""
+        redis = await get_redis()
+        key = f"worker:heartbeat:{worker_id}"
+        while not self._shutdown_event.is_set():
+            try:
+                state = self._worker_states.get(worker_id, {})
+                payload = {
+                    "worker_id": worker_id,
+                    "status": state.get("status", "idle"),
+                    "job_id": state.get("job_id"),
+                    "job_type": state.get("job_type"),
+                    "started_at": state.get("started_at"),
+                    "ts": datetime.now(UTC).isoformat(),
+                }
+                await redis.setex(key, 5, json.dumps(payload))
+            except Exception:
+                logger.exception(f"Heartbeat publish failed for {worker_id}")
+            await asyncio.sleep(HEARTBEAT_INTERVAL)
 
     async def _process_job(self, node: JobNode, worker_id: str) -> None:
         """Process a single job: lock → execute → update status."""
         job_id = node.job_id
+
+        # Update heartbeat state → running
+        self._worker_states[worker_id] = {
+            "status": "running",
+            "job_id": job_id,
+            "job_type": node.job_type,
+            "started_at": datetime.now(UTC).isoformat(),
+        }
 
         # 1. Acquire distributed lock
         if not await self._lock_manager.acquire(job_id, worker_id):
@@ -149,7 +200,13 @@ class WorkerPool:
                 job = result.scalar_one_or_none()
 
                 if job is None or job.status != JobStatus.PENDING:
-                    # Job was cancelled or already picked up
+                    # Job was cancelled or already picked up — reset heartbeat
+                    self._worker_states[worker_id] = {
+                        "status": "idle",
+                        "job_id": None,
+                        "job_type": None,
+                        "started_at": None,
+                    }
                     return
 
                 job.status = JobStatus.PROCESSING
@@ -231,6 +288,13 @@ class WorkerPool:
         finally:
             # 6. Always release the lock
             await self._lock_manager.release(job_id, worker_id)
+            # 7. Reset heartbeat state → idle
+            self._worker_states[worker_id] = {
+                "status": "idle",
+                "job_id": None,
+                "job_type": None,
+                "started_at": None,
+            }
 
     async def _handle_failure(
         self,
