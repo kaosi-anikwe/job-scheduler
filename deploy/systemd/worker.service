@@ -12,6 +12,7 @@ WorkingDirectory=/opt/dilamme-scheduler
 
 # Environment — override via /etc/dilamme/env or EnvironmentFile
 EnvironmentFile=-/etc/dilamme/worker.env
+Environment=PATH=/usr/local/bin:/usr/bin:/bin:/home/ubuntu/.local/bin
 
 ExecStart=/opt/dilamme-scheduler/deploy/start_worker.sh
 
@@ -34,7 +35,6 @@ NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
 ReadWritePaths=/opt/dilamme-scheduler
-ProtectHome=true
 
 # Logging — captured by journald
 StandardOutput=journal

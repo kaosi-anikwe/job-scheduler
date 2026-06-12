@@ -12,6 +12,7 @@ WorkingDirectory=/opt/dilamme-scheduler
 
 # Environment — override via /etc/dilamme/env or EnvironmentFile
 EnvironmentFile=-/etc/dilamme/api.env
+Environment=PATH=/usr/local/bin:/usr/bin:/bin:/home/ubuntu/.local/bin
 
 # Script runs migrations then starts uvicorn
 ExecStart=/opt/dilamme-scheduler/deploy/start_api.sh
@@ -31,7 +32,6 @@ NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
 ReadWritePaths=/opt/dilamme-scheduler
-ProtectHome=true
 
 # Logging — captured by journald
 StandardOutput=journal
