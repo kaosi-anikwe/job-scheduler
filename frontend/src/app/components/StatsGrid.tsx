@@ -2,7 +2,7 @@ import type { DashboardStats } from '../lib/services';
 
 export function StatsGrid({ stats }: { stats: DashboardStats }) {
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4">
+    <div className="grid grid-cols-1 sm:grid-cols-5 xl:grid-cols-10 gap-4">
       <Stat title="Pending" value={stats.pending ?? 0} desc="Queued / awaiting" />
       <Stat
         title="In-Flight"

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Lock, Copy, X } from 'lucide-react';
+import { Lock, Copy, X, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useCancelJob } from '../lib/hooks';
 import type { JobResponse } from '../lib/services';
 import {
@@ -16,7 +16,21 @@ import {
   effectivePriority,
 } from '../lib/format';
 
-export function JobsTable({ jobs, loading }: { jobs: JobResponse[]; loading: boolean }) {
+export function JobsTable({
+  jobs,
+  loading,
+  total = 0,
+  page = 0,
+  limit = 25,
+  onPageChange,
+}: {
+  jobs: JobResponse[];
+  loading: boolean;
+  total?: number;
+  page?: number;
+  limit?: number;
+  onPageChange?: (page: number) => void;
+}) {
   const [filter, setFilter] = useState<string>('all');
   const cancelJob = useCancelJob();
   const now = Date.now();
@@ -46,6 +60,40 @@ export function JobsTable({ jobs, loading }: { jobs: JobResponse[]; loading: boo
             ))}
           </div>
         </div>
+
+        {/* Pagination controls */}
+        {total > limit && (
+          <div className="flex items-center justify-between pt-2 border-t border-base-300">
+            <span className="text-xs text-base-content/50">
+              {total} total · page {page + 1} of {Math.ceil(total / limit)}
+            </span>
+            <div className="join">
+              <button
+                className="btn btn-xs join-item btn-ghost"
+                disabled={page === 0}
+                onClick={() => onPageChange?.(page - 1)}
+              >
+                <ChevronLeft size={14} />
+              </button>
+              {Array.from({ length: Math.ceil(total / limit) }, (_, i) => (
+                <button
+                  key={i}
+                  className={`btn btn-xs join-item ${i === page ? 'btn-active' : 'btn-ghost'}`}
+                  onClick={() => onPageChange?.(i)}
+                >
+                  {i + 1}
+                </button>
+              )).slice(0, 7)}
+              <button
+                className="btn btn-xs join-item btn-ghost"
+                disabled={(page + 1) * limit >= total}
+                onClick={() => onPageChange?.(page + 1)}
+              >
+                <ChevronRight size={14} />
+              </button>
+            </div>
+          </div>
+        )}
 
         <div className="overflow-x-auto">
           <table className="table table-zebra table-sm">

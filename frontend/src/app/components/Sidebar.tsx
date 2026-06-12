@@ -22,7 +22,7 @@ export function Sidebar() {
       </div>
 
       <div className="mx-5 mb-2 rounded-lg bg-base-300/40 px-3 py-2.5 flex items-center justify-between">
-        <span className="text-xs text-base-content/60">Telemetry</span>
+        <span className="text-xs text-base-content/60">Engine</span>
         {status === 'OPEN' && (
           <span className="badge badge-success badge-sm gap-1.5 font-medium">
             <span className="inline-block size-1.5 rounded-full bg-current animate-pulse" />

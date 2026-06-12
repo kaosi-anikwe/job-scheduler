@@ -17,17 +17,22 @@ import type { JobResponse, JobCreate, DashboardStats } from './services';
 export function useJobs(initialFilter?: { status?: string }) {
   const [jobs, setJobs] = useState<JobResponse[]>([]);
   const [loading, setLoading] = useState(true);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(0);
+  const [limit] = useState(25);
   const { lastMessage } = useWebSocket();
 
   const refresh = useCallback(async () => {
-    const res = await fetchJobs({ status: initialFilter?.status, limit: 200 });
+    setLoading(true);
+    const res = await fetchJobs({ status: initialFilter?.status, offset: page * limit, limit });
     if (res.data) {
       setJobs(res.data.jobs);
+      setTotal(res.data.total);
     }
     setLoading(false);
-  }, [initialFilter?.status]);
+  }, [initialFilter?.status, page, limit]);
 
-  // Initial fetch
+  // Initial fetch + re-fetch when page/filter changes
   useEffect(() => {
     refresh();
   }, [refresh]);
@@ -45,7 +50,7 @@ export function useJobs(initialFilter?: { status?: string }) {
     );
   }, [lastMessage]);
 
-  return { jobs, loading, refresh };
+  return { jobs, loading, total, page, limit, refresh, setPage };
 }
 
 /* ------------------------------------------------------------------ */

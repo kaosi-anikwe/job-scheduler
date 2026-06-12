@@ -3,7 +3,9 @@
 @import "tailwindcss";
 
 @plugin "daisyui" {
-  themes: dim --default, night;
+  themes:
+    dim --default,
+    night;
 }
 
 @theme {
