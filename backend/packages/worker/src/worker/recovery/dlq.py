@@ -86,7 +86,7 @@ async def send_dlq_alert(dlq_count: int) -> None:
 
         msg = MIMEText(body)
         msg["Subject"] = subject
-        msg["From"] = "scheduler@dilamme.com"
+        msg["From"] = settings.SMTP_USER
         msg["To"] = settings.DLQ_ALERT_EMAIL
 
         await aiosmtplib.send(

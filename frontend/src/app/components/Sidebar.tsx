@@ -1,14 +1,14 @@
 import { NavLink } from 'react-router';
 import { LayoutDashboard, Skull, Boxes, Cpu } from 'lucide-react';
-import { useJobs, useSchedulerInfo } from '../lib/hooks';
+import { useStats, useSchedulerInfo } from '../lib/hooks';
 import { useWebSocket } from '../lib/websocket';
 
 export function Sidebar() {
-  const { jobs } = useJobs();
+  const { stats } = useStats();
   const { status } = useWebSocket();
   const schedulerInfo = useSchedulerInfo();
-  const dlqCount = jobs.filter((j) => j.status === 'failed').length;
-  const activeCount = jobs.filter((j) => j.status === 'processing').length;
+  const dlqCount = stats.failed ?? 0;
+  const activeCount = stats.processing ?? 0;
 
   return (
     <aside className="w-64 bg-base-200 flex flex-col border-r border-base-300 shrink-0">

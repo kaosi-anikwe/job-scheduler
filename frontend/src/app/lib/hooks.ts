@@ -39,18 +39,10 @@ export function useJobs(initialFilter?: { status?: string }) {
     refresh();
   }, [refresh]);
 
-  // WebSocket splicing: when a job state changes, update the row in place
+  // Re-fetch the current page on any WS event so the table stays live
   useEffect(() => {
-    if (!lastMessage || lastMessage.event !== 'JOB_STATE_CHANGED') return;
-    const { job_id, data } = lastMessage;
-    setJobs((prev) =>
-      prev.map((j) =>
-        j.id === job_id
-          ? { ...j, status: (data.new_status as string) ?? j.status, retry_count: (data.retry_count as number) ?? j.retry_count }
-          : j,
-      ),
-    );
-  }, [lastMessage]);
+    if (lastMessage) refresh();
+  }, [lastMessage, refresh]);
 
   return { jobs, loading, total, page, limit, refresh, setPage };
 }
@@ -87,6 +79,7 @@ export function useStats() {
 export function useDlq() {
   const [dlqJobs, setDlqJobs] = useState<JobResponse[]>([]);
   const [loading, setLoading] = useState(true);
+  const { lastMessage } = useWebSocket();
 
   const refresh = useCallback(async () => {
     try {
@@ -97,6 +90,11 @@ export function useDlq() {
   }, []);
 
   useEffect(() => { refresh(); }, [refresh]);
+
+  // Refresh whenever a job fails or is retried from DLQ
+  useEffect(() => {
+    if (lastMessage) refresh();
+  }, [lastMessage, refresh]);
 
   return { dlqJobs, loading, refresh };
 }

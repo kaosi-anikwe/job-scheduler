@@ -77,12 +77,18 @@ async def dlq_monitor_loop(shutdown: asyncio.Event) -> None:
     """
     logger.info("DLQ monitor started", extra={"event": "DLQ_MONITOR_START"})
 
+    alerted = False  # True while threshold is exceeded; prevents repeat alerts
+
     while not shutdown.is_set():
         try:
             async with get_db_context() as session:
-                if await check_dlq_threshold(session):
+                threshold_exceeded = await check_dlq_threshold(session)
+                if threshold_exceeded and not alerted:
                     count = await get_dlq_count(session)
                     await send_dlq_alert(count)
+                    alerted = True
+                elif not threshold_exceeded:
+                    alerted = False  # reset so a future spike triggers a new alert
         except asyncio.CancelledError:
             break
         except Exception:

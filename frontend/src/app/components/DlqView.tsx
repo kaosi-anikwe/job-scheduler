@@ -5,7 +5,7 @@ import { JOB_TYPE_LABEL, MAX_RETRIES } from '../lib/types';
 import { shortId, timeAgo, fmtTime } from '../lib/format';
 import type { JobResponse } from '../lib/services';
 
-const DLQ_ALERT_THRESHOLD = 3;
+const DLQ_ALERT_THRESHOLD = 10;
 
 export function DlqView() {
   const { dlqJobs, loading, refresh } = useDlq();
