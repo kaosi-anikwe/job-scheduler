@@ -104,6 +104,7 @@ class JobResponse(BaseModel):
     interval: str | None = None
     created_at: datetime
     updated_at: datetime
+    dependency_ids: list[uuid.UUID] = Field(default_factory=list)
 
 
 class JobListResponse(BaseModel):

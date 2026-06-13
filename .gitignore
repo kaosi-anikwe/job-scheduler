@@ -28,7 +28,6 @@ env/
 .env
 
 # IDE
-.vscode/
 .idea/
 *.swp
 *.swo
@@ -54,3 +53,7 @@ task.md
 implementation_plan.md
 frontend_design.md
 frontend_guide.md
+branch_structure.json
+temp_auto_push.bat
+temp_interactive_push.bat
+.gitignore

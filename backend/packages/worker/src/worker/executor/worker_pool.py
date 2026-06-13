@@ -173,6 +173,31 @@ class WorkerPool:
                 logger.exception(f"Heartbeat publish failed for {worker_id}")
             await asyncio.sleep(HEARTBEAT_INTERVAL)
 
+    async def _reset_to_idle(self, worker_id: str) -> None:
+        """Reset worker state to idle and immediately flush to the Redis heartbeat key.
+
+        Called before publishing any WS completion event so that when the
+        browser refreshes the fleet it sees the idle state rather than a
+        stale 'running' entry.
+        """
+        idle_state: dict[str, Any] = {
+            "status": "idle",
+            "job_id": None,
+            "job_type": None,
+            "started_at": None,
+        }
+        self._worker_states[worker_id] = idle_state
+        try:
+            redis = await get_redis()
+            payload = {
+                "worker_id": worker_id,
+                **idle_state,
+                "ts": datetime.now(UTC).isoformat(),
+            }
+            await redis.setex(f"worker:heartbeat:{worker_id}", 5, json.dumps(payload))
+        except Exception:
+            pass  # heartbeat loop will catch up within 2 s
+
     async def _process_job(self, node: JobNode, worker_id: str) -> None:
         """Process a single job: lock → execute → update status."""
         job_id = node.job_id
@@ -191,6 +216,8 @@ class WorkerPool:
                 f"Could not acquire lock for job {job_id} — skipping",
                 extra={"job_id": job_id, "worker_node": worker_id},
             )
+            # Reset — state was already set to 'running' before the lock attempt
+            await self._reset_to_idle(worker_id)
             return
 
         try:
@@ -281,6 +308,10 @@ class WorkerPool:
 
                 await session.commit()
 
+            # Reset to idle BEFORE publishing the WS event so that any
+            # fleet refresh triggered by that event reads the correct state.
+            await self._reset_to_idle(worker_id)
+
             # Publish completion event via Redis
             await self._publish_redis_event(EventType.JOB_COMPLETED, job_id)
         except asyncio.CancelledError:
@@ -291,13 +322,8 @@ class WorkerPool:
         finally:
             # 6. Always release the lock
             await self._lock_manager.release(job_id, worker_id)
-            # 7. Reset heartbeat state → idle
-            self._worker_states[worker_id] = {
-                "status": "idle",
-                "job_id": None,
-                "job_type": None,
-                "started_at": None,
-            }
+            # 7. Safety-net reset (covers cancelled / unexpected paths)
+            await self._reset_to_idle(worker_id)
 
     async def _handle_failure(
         self,
@@ -364,6 +390,9 @@ class WorkerPool:
                 )
 
             await session.commit()
+
+        # Reset to idle BEFORE publishing WS event (same race-condition fix as success path)
+        await self._reset_to_idle(worker_id)
 
         # Publish failure event via Redis
         evt = EventType.JOB_FAILED if not should_retry(job) else EventType.RETRY_ATTEMPTED
