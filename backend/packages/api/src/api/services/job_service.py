@@ -72,9 +72,6 @@ async def create_job(data: JobCreate, session: AsyncSession) -> Job:
         {"type": data.type, "priority": data.priority.value},
     )
 
-    # Reload server-generated columns (created_at, updated_at) that flush() expired
-    await session.refresh(job)
-
     return job
 
 
@@ -148,9 +145,6 @@ async def cancel_job(
     job.status = JobStatus.CANCELLED
 
     await publish_event(EventType.JOB_CANCELLED, job.id, session)
-
-    # Reload server-generated columns (updated_at) that flush() expired
-    await session.refresh(job)
 
     # If the job was processing, broadcast a cancellation signal via Redis
     if was_processing:
