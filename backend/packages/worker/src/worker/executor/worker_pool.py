@@ -220,6 +220,9 @@ class WorkerPool:
                 )
                 await session.commit()
 
+            # Publish start event so the WebSocket fan-out triggers a fleet refresh
+            await self._publish_redis_event(EventType.JOB_STARTED, job_id)
+
             # 3. Execute the handler in a tracked task
             handler = get_handler(node.job_type)
             if handler is None:
