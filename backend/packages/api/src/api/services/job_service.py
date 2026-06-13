@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from api.services.event_publisher import publish_event
 from shared.dag import validate_no_cycles
@@ -64,6 +65,14 @@ async def create_job(data: JobCreate, session: AsyncSession) -> Job:
             dep = JobDependency(parent_job_id=parent_id, child_job_id=job.id)
             session.add(dep)
 
+    # Eagerly populate parent_dependencies on the in-memory object so
+    # model_validate() can read dependency_ids without a lazy DB round-trip.
+    await session.flush()
+    result2 = await session.execute(
+        select(Job).where(Job.id == job.id).options(selectinload(Job.parent_dependencies))
+    )
+    job = result2.scalar_one()
+
     # Publish creation event
     await publish_event(
         EventType.JOB_CREATED,
@@ -76,8 +85,10 @@ async def create_job(data: JobCreate, session: AsyncSession) -> Job:
 
 
 async def get_job(job_id: uuid.UUID, session: AsyncSession) -> Job | None:
-    """Fetch a single job by ID."""
-    result = await session.execute(select(Job).where(Job.id == job_id))
+    """Fetch a single job by ID, with parent dependencies eagerly loaded."""
+    result = await session.execute(
+        select(Job).where(Job.id == job_id).options(selectinload(Job.parent_dependencies))
+    )
     return result.scalar_one_or_none()
 
 
@@ -105,6 +116,7 @@ async def list_jobs(
         count_query = count_query.where(Job.priority == priority)
 
     query = query.order_by(Job.created_at.desc()).offset(offset).limit(limit)
+    query = query.options(selectinload(Job.parent_dependencies))
 
     result = await session.execute(query)
     jobs = result.scalars().all()

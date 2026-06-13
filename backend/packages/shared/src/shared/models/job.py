@@ -105,6 +105,15 @@ class Job(TimestampMixin, Base):
             f"priority={self.priority} status={self.status!r}>"
         )
 
+    @property
+    def dependency_ids(self) -> list[uuid.UUID]:
+        """UUIDs of parent jobs this job depends on.
+
+        Only safe to call when ``parent_dependencies`` has been eagerly loaded
+        (via ``selectinload`` or explicit assignment).
+        """
+        return [dep.parent_job_id for dep in (self.parent_dependencies or [])]
+
 
 # Avoid circular import — reference via string in relationship above
 from shared.models.execution_log import ExecutionLog  # noqa: E402, F811

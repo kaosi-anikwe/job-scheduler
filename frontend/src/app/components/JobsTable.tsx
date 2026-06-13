@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Lock, Copy, X, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useCancelJob } from '../lib/hooks';
 import type { JobResponse } from '../lib/services';
+import { JobDetailModal } from './JobDetailModal';
 import {
   JOB_TYPE_LABEL,
   PRIORITY_LABEL,
@@ -32,6 +33,7 @@ export function JobsTable({
   onPageChange?: (page: number) => void;
 }) {
   const [filter, setFilter] = useState<string>('all');
+  const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
   const cancelJob = useCancelJob();
   const now = Date.now();
 
@@ -118,6 +120,7 @@ export function JobsTable({
                   now={now}
                   completedIds={completedIds}
                   onCancel={cancelJob}
+                  onClick={() => setSelectedJobId(job.id)}
                 />
               ))}
               {filtered.length === 0 && (
@@ -131,6 +134,10 @@ export function JobsTable({
           </table>
         </div>
       </div>
+
+      {selectedJobId && (
+        <JobDetailModal jobId={selectedJobId} onClose={() => setSelectedJobId(null)} />
+      )}
     </div>
   );
 }
@@ -140,11 +147,13 @@ function Row({
   now,
   completedIds,
   onCancel,
+  onClick,
 }: {
   job: JobResponse;
   now: number;
   completedIds: Set<string>;
   onCancel: (id: string) => Promise<unknown>;
+  onClick: () => void;
 }) {
   const eff = ['pending', 'processing'].includes(job.status) ? effectivePriority(job) : job.priority;
   const aged = eff < job.priority;
@@ -155,12 +164,15 @@ function Row({
   const isFailed = job.status === 'failed' && job.retry_count >= job.max_retries;
 
   return (
-    <tr className={isFailed ? 'bg-error/5' : undefined}>
+    <tr
+      className={`cursor-pointer hover:bg-base-300/40 transition-colors ${isFailed ? 'bg-error/5' : ''}`}
+      onClick={onClick}
+    >
       <td>
         <button
           className="badge badge-ghost font-mono text-xs"
           title="Click to copy full id"
-          onClick={() => navigator.clipboard?.writeText(job.id)}
+          onClick={(e) => { e.stopPropagation(); navigator.clipboard?.writeText(job.id); }}
         >
           {shortId(job.id)} <Copy size={11} className="ml-1 opacity-60" />
         </button>
@@ -218,7 +230,7 @@ function Row({
         {cancellable && (
           <button
             className="btn btn-error btn-xs"
-            onClick={() => onCancel(job.id)}
+            onClick={(e) => { e.stopPropagation(); onCancel(job.id); }}
           >
             <X size={12} /> Cancel
           </button>
