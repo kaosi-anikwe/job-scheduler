@@ -26,11 +26,11 @@ export function useJobs(initialFilter?: { status?: string }) {
 
   const refresh = useCallback(async () => {
     setLoading(true);
-    const res = await fetchJobs({ status: initialFilter?.status, offset: page * limit, limit });
-    if (res.data) {
-      setJobs(res.data.jobs);
-      setTotal(res.data.total);
-    }
+    try {
+      const data = await fetchJobs({ status: initialFilter?.status, offset: page * limit, limit });
+      setJobs(data.jobs);
+      setTotal(data.total);
+    } catch { /* toast shown by interceptor */ }
     setLoading(false);
   }, [initialFilter?.status, page, limit]);
 
@@ -57,8 +57,8 @@ export function useStats() {
 
   const refresh = useCallback(async () => {
     try {
-      const res = await fetchDashboardStats();
-      if (res.data) setStats(res.data);
+      const data = await fetchDashboardStats();
+      setStats(data);
     } catch { /* ignore */ }
   }, []);
 
@@ -83,8 +83,8 @@ export function useDlq() {
 
   const refresh = useCallback(async () => {
     try {
-      const res = await fetchDlqJobs();
-      if (res.data) setDlqJobs(res.data);
+      const data = await fetchDlqJobs();
+      setDlqJobs(data);
     } catch { /* ignore */ }
     setLoading(false);
   }, []);
@@ -108,20 +108,26 @@ export function useCreateJob() {
 
   const submit = async (data: JobCreate) => {
     setLoading(true);
-    const res = await createJob(data);
-    setLoading(false);
-    return res;
+    try {
+      return await createJob(data);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return { submit, loading };
 }
 
 export function useCancelJob() {
-  return async (jobId: string) => cancelJob(jobId);
+  return async (jobId: string) => {
+    try { await cancelJob(jobId); } catch { /* toasted */ }
+  };
 }
 
 export function useRetryDlqJob() {
-  return async (jobId: string) => retryDlqJob(jobId);
+  return async (jobId: string) => {
+    try { await retryDlqJob(jobId); } catch { /* toasted */ }
+  };
 }
 
 /* ------------------------------------------------------------------ */
@@ -134,8 +140,8 @@ export function useWorkerFleet() {
 
   const refresh = useCallback(async () => {
     try {
-      const res = await fetchWorkerFleet();
-      if (res.data) setFleet(res.data);
+      const data = await fetchWorkerFleet();
+      setFleet(data);
     } catch { /* worker process may be down */ }
   }, []);
 
@@ -157,9 +163,9 @@ export function useSchedulerInfo() {
   const [info, setInfo] = useState<SchedulerInfo | null>(null);
 
   useEffect(() => {
-    fetchSchedulerInfo().then((res) => {
-      if (res.data) setInfo(res.data);
-    });
+    fetchSchedulerInfo()
+      .then((data) => setInfo(data))
+      .catch(() => { });
   }, []);
 
   return info;

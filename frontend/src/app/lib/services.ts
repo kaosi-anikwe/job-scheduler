@@ -13,7 +13,7 @@ import {
 import type {
   JobCreate,
 } from '../../sdk/types.gen';
-import { apiClient } from './api';
+import { apiClient, unwrap } from './api';
 
 /* ------------------------------------------------------------------ */
 /* Jobs                                                                */
@@ -26,7 +26,7 @@ export function fetchJobs(params?: {
   offset?: number;
   limit?: number;
 }) {
-  return listJobsSdk({
+  return unwrap(listJobsSdk({
     client: apiClient,
     query: {
       status: params?.status ?? null,
@@ -35,35 +35,35 @@ export function fetchJobs(params?: {
       offset: params?.offset ?? 0,
       limit: params?.limit ?? 200,
     },
-  });
+  }));
 }
 
 export function createJob(data: JobCreate) {
-  return createJobSdk({
+  return unwrap(createJobSdk({
     client: apiClient,
     body: data,
-  });
+  }));
 }
 
 export function fetchJob(jobId: string) {
-  return getJobSdk({
+  return unwrap(getJobSdk({
     client: apiClient,
     path: { job_id: jobId },
-  });
+  }));
 }
 
 export function cancelJob(jobId: string) {
-  return cancelJobSdk({
+  return unwrap(cancelJobSdk({
     client: apiClient,
     path: { job_id: jobId },
-  });
+  }));
 }
 
 export function fetchJobLogs(jobId: string) {
-  return getJobLogsSdk({
+  return unwrap(getJobLogsSdk({
     client: apiClient,
     path: { job_id: jobId },
-  });
+  }));
 }
 
 /* ------------------------------------------------------------------ */
@@ -71,7 +71,7 @@ export function fetchJobLogs(jobId: string) {
 /* ------------------------------------------------------------------ */
 
 export function fetchDashboardStats() {
-  return dashboardStatsSdk({ client: apiClient });
+  return unwrap(dashboardStatsSdk({ client: apiClient }));
 }
 
 /* ------------------------------------------------------------------ */
@@ -79,14 +79,14 @@ export function fetchDashboardStats() {
 /* ------------------------------------------------------------------ */
 
 export function fetchDlqJobs() {
-  return listDlqJobsSdk({ client: apiClient });
+  return unwrap(listDlqJobsSdk({ client: apiClient }));
 }
 
 export function retryDlqJob(jobId: string) {
-  return retryDlqJobSdk({
+  return unwrap(retryDlqJobSdk({
     client: apiClient,
     path: { job_id: jobId },
-  });
+  }));
 }
 
 /* ------------------------------------------------------------------ */
@@ -94,7 +94,7 @@ export function retryDlqJob(jobId: string) {
 /* ------------------------------------------------------------------ */
 
 export function fetchWorkerFleet() {
-  return getWorkerFleetSdk({ client: apiClient });
+  return unwrap(getWorkerFleetSdk({ client: apiClient }));
 }
 
 /* ------------------------------------------------------------------ */
@@ -102,7 +102,7 @@ export function fetchWorkerFleet() {
 /* ------------------------------------------------------------------ */
 
 export function fetchSchedulerInfo() {
-  return getSchedulerInfoSdk({ client: apiClient });
+  return unwrap(getSchedulerInfoSdk({ client: apiClient }));
 }
 
 /* ------------------------------------------------------------------ */

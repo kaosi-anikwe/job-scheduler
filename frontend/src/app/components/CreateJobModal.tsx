@@ -51,16 +51,17 @@ export function CreateJobModal({ onCreated }: Props) {
       dependency_ids: deps.length > 0 ? deps : undefined,
     };
 
-    const res = await submit(data);
-    if (res.error) {
-      toast.error('Failed to create job');
-      return;
+    let job;
+    try {
+      job = await submit(data);
+    } catch {
+      return; // interceptor already showed the toast
     }
 
     toast.success(
       deps.length
-        ? `Queued ${shortId(res.data!.id)} — runs after ${deps.length} job(s)`
-        : `Queued ${shortId(res.data!.id)}`,
+        ? `Queued ${shortId(job.id)} — runs after ${deps.length} job(s)`
+        : `Queued ${shortId(job.id)}`,
     );
     setDeps([]);
     ref.current?.close();
